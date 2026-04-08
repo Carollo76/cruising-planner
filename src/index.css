@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy-50: #eef3ff;
+  --color-navy-100: #d9e4ff;
+  --color-navy-200: #bccfff;
+  --color-navy-300: #8eb0ff;
+  --color-navy-400: #5985ff;
+  --color-navy-500: #3461fc;
+  --color-navy-600: #1e3ff1;
+  --color-navy-700: #162dde;
+  --color-navy-800: #1926b4;
+  --color-navy-900: #1a268d;
+  --color-navy-950: #0f172a;
+
+  --color-sea-50: #effbfc;
+  --color-sea-100: #d6f5f7;
+  --color-sea-200: #b2ebf0;
+  --color-sea-300: #7ddbe4;
+  --color-sea-400: #40c1d0;
+  --color-sea-500: #25a5b6;
+  --color-sea-600: #228699;
+  --color-sea-700: #226d7d;
+  --color-sea-800: #245a67;
+  --color-sea-900: #224b58;
+  --color-sea-950: #11313b;
+
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-success: #22c55e;
+  --color-go: #22c55e;
+  --color-caution: #f59e0b;
+  --color-no-go: #ef4444;
+}
+
+/* Leaflet needs explicit height */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #0f172a;
+}
+
+/* Dark theme for Leaflet popups */
+.leaflet-popup-content-wrapper {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.leaflet-popup-content {
+  margin: 10px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.leaflet-popup-content .text-slate-900 {
+  color: #f1f5f9 !important;
+}
+.leaflet-popup-content .text-slate-600 {
+  color: #94a3b8 !important;
+}
+.leaflet-popup-content .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+.leaflet-popup-content .text-sea-700 {
+  color: #40c1d0 !important;
+}
+.leaflet-popup-tip {
+  background: #1e293b;
+  border: 1px solid #334155;
+}
+.leaflet-popup-close-button {
+  color: #94a3b8 !important;
+}
+.leaflet-popup-close-button:hover {
+  color: #f1f5f9 !important;
+}
+
+/* Dark theme for Leaflet zoom control */
+.leaflet-bar {
+  border: 1px solid #334155 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+.leaflet-bar a {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  border-bottom-color: #334155 !important;
+}
+.leaflet-bar a:hover {
+  background: #334155 !important;
+}
+.leaflet-control-attribution {
+  background: rgba(15, 23, 42, 0.8) !important;
+  color: #94a3b8 !important;
+}
+.leaflet-control-attribution a {
+  color: #40c1d0 !important;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+
+/* Safe area insets for notched phones */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
