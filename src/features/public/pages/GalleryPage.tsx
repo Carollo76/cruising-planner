@@ -25,8 +25,8 @@ const photos: Photo[] = [
   },
   {
     src: '/photos/03-stern-new-york-ny.jpeg',
-    alt: 'Stern with New York, NY hailing port',
-    caption: 'New York, NY — the hailing port',
+    alt: 'Stern shot — taken before re-registering to Huntington, NY',
+    caption: 'Stern view — this was the prior hailing port (now Huntington, NY)',
   },
   {
     src: '/photos/04-family-in-cockpit.jpeg',

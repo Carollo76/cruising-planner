@@ -24,7 +24,7 @@ export function PublicNav() {
               S/V Well Adjusted
             </div>
             <div className="text-[10px] uppercase tracking-widest text-slate-500">
-              Beneteau Oceanis 37 · Centerport, NY
+              Beneteau Oceanis 37 · Huntington, NY
             </div>
           </div>
         </Link>

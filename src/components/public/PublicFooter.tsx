@@ -10,7 +10,7 @@ export function PublicFooter() {
           <span className="text-sm font-medium">S/V Well Adjusted</span>
         </div>
         <p className="mt-2 text-xs text-slate-500">
-          Beneteau Oceanis 37 · Hailing from New York, NY · Moored at Centerport Yacht Club
+          Beneteau Oceanis 37 · Hailing from Huntington, NY · Moored at Centerport Yacht Club
         </p>
         <p className="mt-3 text-xs text-slate-600">© {year} The Carollo Family</p>
       </div>

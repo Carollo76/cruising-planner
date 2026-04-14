@@ -26,7 +26,7 @@ export function AboutPage() {
 
       <div className="mx-auto max-w-3xl px-4 py-12">
         <h1 className="text-3xl font-bold text-slate-100 sm:text-4xl">About the Boat</h1>
-        <p className="mt-2 text-slate-400">A 2012 Beneteau Oceanis 37 · New York, NY</p>
+        <p className="mt-2 text-slate-400">A 2012 Beneteau Oceanis 37 · Huntington, NY</p>
 
         {/* Story */}
         <div className="mt-8 space-y-5 text-slate-300 leading-relaxed">
