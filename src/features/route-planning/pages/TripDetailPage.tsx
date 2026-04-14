@@ -19,7 +19,7 @@ import { format } from 'date-fns';
 import { db } from '../../../db/database';
 import type { Trip, Route } from '../../../types/navigation';
 import type { CrewMember } from '../../../types/crew';
-import type { ChecklistRun, Checklist } from '../../../types/safety';
+import type { ChecklistRun } from '../../../types/safety';
 import { formatDistance, formatDuration } from '../../../utils/navigation-math';
 
 const statusColors: Record<Trip['status'], string> = {
@@ -77,7 +77,7 @@ export function TripDetailPage() {
     return (
       <div className="p-4">
         <p className="text-slate-400">Trip not found</p>
-        <Link to="/trips" className="mt-4 inline-block text-sea-400">
+        <Link to="/planner/trips" className="mt-4 inline-block text-sea-400">
           Back to trips
         </Link>
       </div>
@@ -99,7 +99,7 @@ export function TripDetailPage() {
       <div className="border-b border-slate-800 bg-slate-900 p-4">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/trips')}
+            onClick={() => navigate('/planner/trips')}
             className="rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -121,7 +121,7 @@ export function TripDetailPage() {
             </div>
           </div>
           <Link
-            to={`/trips/${trip.id}/edit`}
+            to={`/planner/trips/${trip.id}/edit`}
             className="flex items-center gap-1 rounded bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-slate-700"
           >
             <Pencil className="h-3.5 w-3.5" />
@@ -178,7 +178,7 @@ export function TripDetailPage() {
               Routes
             </h3>
             <Link
-              to={`/routes/new?tripId=${trip.id}`}
+              to={`/planner/routes/new?tripId=${trip.id}`}
               className="flex items-center gap-1 rounded bg-sea-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sea-700"
             >
               <Plus className="h-3 w-3" />
@@ -190,7 +190,7 @@ export function TripDetailPage() {
               <Navigation className="mx-auto mb-2 h-8 w-8 text-slate-600" />
               <p className="text-sm text-slate-400">No routes yet</p>
               <Link
-                to={`/routes/new?tripId=${trip.id}`}
+                to={`/planner/routes/new?tripId=${trip.id}`}
                 className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-sea-600 px-4 py-2 text-sm font-medium text-white hover:bg-sea-700"
               >
                 <Plus className="h-4 w-4" />
@@ -202,7 +202,7 @@ export function TripDetailPage() {
               {routes.map((r) => (
                 <Link
                   key={r.id}
-                  to={`/routes/${r.id}`}
+                  to={`/planner/routes/${r.id}`}
                   className="block rounded-lg border border-slate-800 bg-slate-900 p-3 transition-colors hover:border-slate-700"
                 >
                   <div className="font-medium text-slate-100">{r.name}</div>
@@ -278,7 +278,7 @@ export function TripDetailPage() {
         {/* Weather Assessment — the headline action */}
         {routes.length > 0 && (
           <Link
-            to={`/trips/${trip.id}/assess`}
+            to={`/planner/trips/${trip.id}/assess`}
             className="flex items-center gap-3 rounded-lg border border-sea-600/30 bg-sea-600/10 p-4 transition-colors hover:border-sea-500 hover:bg-sea-600/20"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-sea-600/20">
@@ -301,21 +301,21 @@ export function TripDetailPage() {
           </h3>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <Link
-              to="/safety"
+              to="/planner/safety"
               className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 p-3 text-sm hover:border-slate-700"
             >
               <ClipboardCheck className="h-4 w-4 text-green-400" />
               Checklists
             </Link>
             <Link
-              to="/safety"
+              to="/planner/safety"
               className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 p-3 text-sm hover:border-slate-700"
             >
               <FileText className="h-4 w-4 text-blue-400" />
               Float Plan
             </Link>
             <Link
-              to="/provisioning"
+              to="/planner/provisioning"
               className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 p-3 text-sm hover:border-slate-700"
             >
               <ShoppingCart className="h-4 w-4 text-purple-400" />

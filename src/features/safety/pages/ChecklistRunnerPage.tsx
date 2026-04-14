@@ -242,7 +242,7 @@ export function ChecklistRunnerPage() {
   // Finish the run
   const handleFinish = useCallback(async () => {
     await persistRun(completedItems, notes, true);
-    navigate('/safety/checklists');
+    navigate('/planner/safety/checklists');
   }, [completedItems, notes, persistRun, navigate]);
 
   if (loading) {
@@ -266,7 +266,7 @@ export function ChecklistRunnerPage() {
       {/* Header */}
       <div className="mb-4 flex items-center gap-3">
         <button
-          onClick={() => navigate('/safety/checklists')}
+          onClick={() => navigate('/planner/safety/checklists')}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
         >
           <ArrowLeft className="h-5 w-5" />

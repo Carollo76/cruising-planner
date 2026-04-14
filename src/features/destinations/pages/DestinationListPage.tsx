@@ -67,7 +67,7 @@ export function DestinationListPage() {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-semibold">Destinations</h2>
         <Link
-          to="/destinations/new"
+          to="/planner/destinations/new"
           className="flex items-center gap-1.5 rounded-lg bg-sea-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-sea-700"
         >
           <Plus className="h-4 w-4" />
@@ -144,7 +144,7 @@ export function DestinationListPage() {
           {sorted.map((d) => (
             <Link
               key={d.id}
-              to={`/destinations/${d.id}`}
+              to={`/planner/destinations/${d.id}`}
               className="block rounded-lg border border-slate-800 bg-slate-900 p-3 transition-colors hover:border-slate-700"
             >
               <div className="flex items-start justify-between gap-3">

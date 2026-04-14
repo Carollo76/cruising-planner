@@ -72,7 +72,7 @@ export function ChecklistListPage() {
           <h2 className="text-xl font-semibold text-slate-100">Checklists</h2>
         </div>
         <Link
-          to="/safety/checklists/new"
+          to="/planner/safety/checklists/new"
           className="flex items-center gap-1.5 rounded-lg bg-sea-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-sea-500"
         >
           <Plus className="h-4 w-4" />
@@ -91,7 +91,7 @@ export function ChecklistListPage() {
           <ClipboardCheck className="mx-auto mb-3 h-10 w-10 text-slate-600" />
           <p className="text-sm text-slate-400">No checklists yet.</p>
           <Link
-            to="/safety/checklists/new"
+            to="/planner/safety/checklists/new"
             className="mt-3 inline-flex items-center gap-1.5 text-sm text-sea-400 hover:text-sea-300"
           >
             <Plus className="h-4 w-4" />
@@ -146,14 +146,14 @@ export function ChecklistListPage() {
                 {/* Actions */}
                 <div className="flex shrink-0 items-center gap-2">
                   <Link
-                    to={`/safety/checklists/${cl.id}/edit`}
+                    to={`/planner/safety/checklists/${cl.id}/edit`}
                     className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
                     title="Edit checklist"
                   >
                     <Pencil className="h-4 w-4" />
                   </Link>
                   <Link
-                    to={`/safety/checklists/${cl.id}/run`}
+                    to={`/planner/safety/checklists/${cl.id}/run`}
                     className="flex items-center gap-1.5 rounded-lg bg-sea-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sea-500"
                   >
                     <Play className="h-3.5 w-3.5" />

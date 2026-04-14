@@ -10,42 +10,42 @@ import {
 
 const safetyItems = [
   {
-    to: '/safety/checklists',
+    to: '/planner/safety/checklists',
     icon: ClipboardCheck,
     label: 'Checklists',
     description: 'Pre-departure, underway, arrival, heavy weather',
     color: 'text-green-400 bg-green-500/10',
   },
   {
-    to: '/safety/float-plan',
+    to: '/planner/safety/float-plan',
     icon: FileText,
     label: 'Float Plan',
     description: 'Generate and share your float plan',
     color: 'text-blue-400 bg-blue-500/10',
   },
   {
-    to: '/safety/emergency',
+    to: '/planner/safety/emergency',
     icon: Phone,
     label: 'Emergency Contacts',
     description: 'Coast Guard, TowBoatUS, medical',
     color: 'text-red-400 bg-red-500/10',
   },
   {
-    to: '/safety/mob',
+    to: '/planner/safety/mob',
     icon: LifeBuoy,
     label: 'Man Overboard',
     description: 'MOB procedure quick reference',
     color: 'text-amber-400 bg-amber-500/10',
   },
   {
-    to: '/safety/briefing',
+    to: '/planner/safety/briefing',
     icon: Users,
     label: 'Crew Briefing',
     description: 'Safety briefing template for your crew',
     color: 'text-purple-400 bg-purple-500/10',
   },
   {
-    to: '/safety/equipment',
+    to: '/planner/safety/equipment',
     icon: AlertTriangle,
     label: 'Safety Equipment',
     description: 'Inventory and inspection tracking',

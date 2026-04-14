@@ -36,7 +36,7 @@ export function TripListPage() {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-semibold">Trips</h2>
         <Link
-          to="/trips/new"
+          to="/planner/trips/new"
           className="flex items-center gap-1.5 rounded-lg bg-sea-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-sea-700"
         >
           <Plus className="h-4 w-4" />
@@ -55,7 +55,7 @@ export function TripListPage() {
           {trips.map((trip) => (
             <Link
               key={trip.id}
-              to={`/trips/${trip.id}`}
+              to={`/planner/trips/${trip.id}`}
               className="group block rounded-lg border border-slate-800 bg-slate-900 p-4 transition-colors hover:border-slate-700"
             >
               <div className="flex items-start justify-between gap-2">

@@ -1,4 +1,16 @@
 import { Routes, Route } from 'react-router-dom';
+
+// Public site layout & pages
+import { PublicLayout } from './components/public/PublicLayout';
+import { HomePage } from './features/public/pages/HomePage';
+import { AboutPage } from './features/public/pages/AboutPage';
+import { CrewPage } from './features/public/pages/CrewPage';
+import { GalleryPage } from './features/public/pages/GalleryPage';
+import { BlogListPage } from './features/public/pages/BlogListPage';
+import { BlogPostPage } from './features/public/pages/BlogPostPage';
+import { BlogEditorPage } from './features/public/pages/BlogEditorPage';
+
+// Planner app (shell with bottom nav)
 import { AppShell } from './components/layout/AppShell';
 import { ChartPage } from './features/route-planning/pages/ChartPage';
 import { RouteListPage } from './features/route-planning/pages/RouteListPage';
@@ -16,10 +28,10 @@ import { DestinationDetailPage } from './features/destinations/pages/Destination
 import { DestinationEditPage } from './features/destinations/pages/DestinationEditPage';
 import { SafetyDashboard } from './features/safety/pages/SafetyDashboard';
 import { MOBPage } from './features/safety/pages/MOBPage';
-import { FloatPlanPage } from './features/safety/pages/FloatPlanPage';
 import { ChecklistListPage } from './features/safety/pages/ChecklistListPage';
 import { ChecklistRunnerPage } from './features/safety/pages/ChecklistRunnerPage';
 import { ChecklistEditorPage } from './features/safety/pages/ChecklistEditorPage';
+import { FloatPlanPage } from './features/safety/pages/FloatPlanPage';
 import { CrewListPage } from './features/crew/pages/CrewListPage';
 import { WatchSchedulePage } from './features/watch-schedule/pages/WatchSchedulePage';
 import { ProvisioningPage } from './features/provisioning/pages/ProvisioningPage';
@@ -28,7 +40,20 @@ import { LogbookPage } from './features/logbook/pages/LogbookPage';
 export default function App() {
   return (
     <Routes>
-      <Route element={<AppShell />}>
+      {/* Public S/V Well Adjusted website */}
+      <Route element={<PublicLayout />}>
+        <Route index element={<HomePage />} />
+        <Route path="about" element={<AboutPage />} />
+        <Route path="crew" element={<CrewPage />} />
+        <Route path="gallery" element={<GalleryPage />} />
+        <Route path="blog" element={<BlogListPage />} />
+        <Route path="blog/new" element={<BlogEditorPage />} />
+        <Route path="blog/:slug" element={<BlogPostPage />} />
+        <Route path="blog/:slug/edit" element={<BlogEditorPage />} />
+      </Route>
+
+      {/* Cruise Planner app — everything under /planner */}
+      <Route path="planner" element={<AppShell />}>
         <Route index element={<ChartPage />} />
         <Route path="routes" element={<RouteListPage />} />
         <Route path="routes/new" element={<RoutePlannerPage mode="create" />} />

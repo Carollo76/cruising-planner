@@ -9,12 +9,12 @@ import {
 } from 'lucide-react';
 
 const moreItems = [
-  { to: '/trips', icon: Compass, label: 'Trips', description: 'Plan voyages with routes, crew, and provisions' },
-  { to: '/boat', icon: Sailboat, label: 'Boat Config', description: 'Vessel specs and details' },
-  { to: '/crew', icon: Users, label: 'Crew', description: 'Manage crew roster' },
-  { to: '/watch', icon: Clock, label: 'Watch Schedule', description: 'Overnight watch rotation' },
-  { to: '/provisioning', icon: ShoppingCart, label: 'Provisioning', description: 'Meals, water, fuel planning' },
-  { to: '/logbook', icon: BookOpen, label: 'Logbook', description: 'Digital voyage log' },
+  { to: '/planner/trips', icon: Compass, label: 'Trips', description: 'Plan voyages with routes, crew, and provisions' },
+  { to: '/planner/boat', icon: Sailboat, label: 'Boat Config', description: 'Vessel specs and details' },
+  { to: '/planner/crew', icon: Users, label: 'Crew', description: 'Manage crew roster' },
+  { to: '/planner/watch', icon: Clock, label: 'Watch Schedule', description: 'Overnight watch rotation' },
+  { to: '/planner/provisioning', icon: ShoppingCart, label: 'Provisioning', description: 'Meals, water, fuel planning' },
+  { to: '/planner/logbook', icon: BookOpen, label: 'Logbook', description: 'Digital voyage log' },
 ];
 
 export function MorePage() {

@@ -138,7 +138,7 @@ export function ChecklistEditorPage() {
       }
 
       await db.checklists.put(checklist);
-      navigate('/safety/checklists');
+      navigate('/planner/safety/checklists');
     } catch (err) {
       console.error('Failed to save checklist:', err);
     } finally {
@@ -154,7 +154,7 @@ export function ChecklistEditorPage() {
       // Also delete associated runs
       const runs = await db.checklistRuns.where('checklistId').equals(id).toArray();
       await db.checklistRuns.bulkDelete(runs.map((r) => r.id));
-      navigate('/safety/checklists');
+      navigate('/planner/safety/checklists');
     } catch (err) {
       console.error('Failed to delete checklist:', err);
     }
@@ -175,7 +175,7 @@ export function ChecklistEditorPage() {
       {/* Header */}
       <div className="mb-4 flex items-center gap-3">
         <button
-          onClick={() => navigate('/safety/checklists')}
+          onClick={() => navigate('/planner/safety/checklists')}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
         >
           <ArrowLeft className="h-5 w-5" />

@@ -90,7 +90,7 @@ export function DestinationDetailPage() {
     if (!destination) return;
     if (confirm(`Delete "${destination.name}"? This cannot be undone.`)) {
       await db.destinations.delete(destination.id);
-      navigate('/destinations');
+      navigate('/planner/destinations');
     }
   };
 
@@ -106,7 +106,7 @@ export function DestinationDetailPage() {
     return (
       <div className="p-4">
         <p className="text-slate-400">Place not found</p>
-        <Link to="/destinations" className="mt-4 inline-block text-sea-400">
+        <Link to="/planner/destinations" className="mt-4 inline-block text-sea-400">
           Back
         </Link>
       </div>
@@ -126,7 +126,7 @@ export function DestinationDetailPage() {
       <div className="border-b border-slate-800 bg-slate-900 p-4">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/destinations')}
+            onClick={() => navigate('/planner/destinations')}
             className="rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -146,7 +146,7 @@ export function DestinationDetailPage() {
             </div>
           </div>
           <Link
-            to={`/destinations/${d.id}/edit`}
+            to={`/planner/destinations/${d.id}/edit`}
             className="flex items-center gap-1 rounded bg-sea-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sea-700"
           >
             <Pencil className="h-3.5 w-3.5" />

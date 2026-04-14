@@ -84,21 +84,6 @@ function formatDuration(hours: number): string {
   return `${h}h ${m}m`;
 }
 
-function roleLabel(role: CrewMember['role']): string {
-  switch (role) {
-    case 'captain':
-      return 'Captain';
-    case 'first-mate':
-      return 'First Mate';
-    case 'crew':
-      return 'Crew';
-    case 'passenger':
-      return 'Passenger';
-    default:
-      return role;
-  }
-}
-
 /* ──────────────────────────── Section wrapper ──────────────────────────── */
 
 function Section({
@@ -597,7 +582,7 @@ export function FloatPlanPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate('/safety')}
+            onClick={() => navigate('/planner/safety')}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
           >
             <ArrowLeft className="h-5 w-5" />

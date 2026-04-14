@@ -186,9 +186,9 @@ export function RoutePlannerPage({ mode = 'create' }: RoutePlannerPageProps) {
           updatedAt: Date.now(),
         });
       }
-      navigate(`/trips/${tripIdParam}`);
+      navigate(`/planner/trips/${tripIdParam}`);
     } else {
-      navigate(`/routes/${id}`);
+      navigate(`/planner/routes/${id}`);
     }
   };
 

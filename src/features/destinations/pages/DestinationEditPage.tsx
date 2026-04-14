@@ -243,7 +243,7 @@ export function DestinationEditPage() {
     };
 
     await db.destinations.put(destination);
-    navigate(`/destinations/${destId}`);
+    navigate(`/planner/destinations/${destId}`);
   };
 
   if (loading) {

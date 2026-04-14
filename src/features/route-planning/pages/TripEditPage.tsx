@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { v4 as uuid } from 'uuid';
 import { ArrowLeft, Save, Plus, X, Navigation } from 'lucide-react';
 import { format } from 'date-fns';
@@ -64,7 +64,7 @@ export function TripEditPage() {
       updatedAt: now,
     };
     await db.trips.put(trip);
-    navigate(`/trips/${tripId}`);
+    navigate(`/planner/trips/${tripId}`);
   };
 
   /** Save trip first, then open route planner with trip linkage */
@@ -84,7 +84,7 @@ export function TripEditPage() {
       updatedAt: now,
     };
     await db.trips.put(trip);
-    navigate(`/routes/new?tripId=${tripId}`);
+    navigate(`/planner/routes/new?tripId=${tripId}`);
   };
 
   const toggleRoute = (rid: string) => {

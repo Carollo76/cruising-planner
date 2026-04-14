@@ -66,7 +66,7 @@ export function DestinationMarkers({ destinations, visibleTypes }: DestinationMa
                 <p className="mt-1 line-clamp-2 text-xs text-slate-700">{d.description}</p>
               )}
               <Link
-                to={`/destinations/${d.id}`}
+                to={`/planner/destinations/${d.id}`}
                 className="mt-2 inline-block text-xs font-medium text-sea-700 hover:underline"
               >
                 View details →

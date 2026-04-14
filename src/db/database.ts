@@ -7,6 +7,7 @@ import type { Checklist, ChecklistRun, FloatPlan } from '../types/safety';
 import type { CrewMember, WatchSchedule } from '../types/crew';
 import type { ProvisionPlan } from '../types/provisioning';
 import type { LogEntry } from '../types/logbook';
+import type { BlogPost } from '../types/blog';
 
 export class CruisingPlannerDB extends Dexie {
   trips!: Table<Trip>;
@@ -23,6 +24,7 @@ export class CruisingPlannerDB extends Dexie {
   weatherCache!: Table<WeatherForecast>;
   tideCache!: Table<TidePrediction>;
   boatConfigs!: Table<BoatConfig>;
+  blogPosts!: Table<BlogPost>;
 
   constructor() {
     super('CruisingPlannerDB');
@@ -41,6 +43,9 @@ export class CruisingPlannerDB extends Dexie {
       weatherCache: 'id, forecastZoneId, fetchedAt',
       tideCache: 'stationId, fetchedAt',
       boatConfigs: 'id, name',
+    });
+    this.version(2).stores({
+      blogPosts: 'id, slug, status, publishedAt',
     });
   }
 }
