@@ -35,7 +35,14 @@ import { FloatPlanPage } from './features/safety/pages/FloatPlanPage';
 import { CrewListPage } from './features/crew/pages/CrewListPage';
 import { WatchSchedulePage } from './features/watch-schedule/pages/WatchSchedulePage';
 import { ProvisioningPage } from './features/provisioning/pages/ProvisioningPage';
+import { MealPlannerPage } from './features/provisioning/pages/MealPlannerPage';
+import { WaterCalculatorPage } from './features/provisioning/pages/WaterCalculatorPage';
+import { FuelCalculatorPage } from './features/provisioning/pages/FuelCalculatorPage';
+import { GroceryListPage } from './features/provisioning/pages/GroceryListPage';
 import { LogbookPage } from './features/logbook/pages/LogbookPage';
+import { LogEntryEditorPage } from './features/logbook/pages/LogEntryEditorPage';
+import { LogEntryDetailPage } from './features/logbook/pages/LogEntryDetailPage';
+import { TripSummaryPage } from './features/logbook/pages/TripSummaryPage';
 
 export default function App() {
   return (
@@ -81,7 +88,15 @@ export default function App() {
         <Route path="crew" element={<CrewListPage />} />
         <Route path="watch" element={<WatchSchedulePage />} />
         <Route path="provisioning" element={<ProvisioningPage />} />
+        <Route path="provisioning/meals" element={<MealPlannerPage />} />
+        <Route path="provisioning/water" element={<WaterCalculatorPage />} />
+        <Route path="provisioning/fuel" element={<FuelCalculatorPage />} />
+        <Route path="provisioning/grocery" element={<GroceryListPage />} />
         <Route path="logbook" element={<LogbookPage />} />
+        <Route path="logbook/new" element={<LogEntryEditorPage />} />
+        <Route path="logbook/trip/:tripId" element={<TripSummaryPage />} />
+        <Route path="logbook/:id" element={<LogEntryDetailPage />} />
+        <Route path="logbook/:id/edit" element={<LogEntryEditorPage />} />
       </Route>
     </Routes>
   );
