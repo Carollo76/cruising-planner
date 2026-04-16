@@ -31,7 +31,7 @@ export function HomePage() {
         {/* Ambient gradient background using the photo — very blurred, behind everything */}
         <div className="pointer-events-none absolute inset-0">
           <img
-            src="/photos/01-hero-well-adjusted-at-mooring.jpeg"
+            src="/photos/09-dressed-ship-sunset.jpeg"
             alt=""
             aria-hidden="true"
             className="h-full w-full object-cover object-center opacity-25 blur-3xl"
@@ -91,8 +91,8 @@ export function HomePage() {
               {/* The photo */}
               <div className="relative overflow-hidden rounded-2xl border border-white/10 shadow-2xl transition-transform duration-500 group-hover:scale-[1.01]">
                 <img
-                  src="/photos/01-hero-well-adjusted-at-mooring.jpeg"
-                  alt="S/V Well Adjusted at mooring in Northport Harbor"
+                  src="/photos/09-dressed-ship-sunset.jpeg"
+                  alt="S/V Well Adjusted dressed ship at sunset"
                   className="block max-h-[88vh] w-auto object-cover"
                 />
                 {/* Subtle caption badge bottom-left */}
