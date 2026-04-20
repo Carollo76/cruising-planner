@@ -192,8 +192,8 @@ export function HomePage() {
             </div>
             <div className="hidden lg:block">
               <img
-                src="/photos/01-well-adjusted-profile.jpeg"
-                alt="Well Adjusted dressed ship at sunset"
+                src="/photos/09-dressed-ship-sunset.jpeg"
+                alt="Well Adjusted dressed with signal flags"
                 className="rounded-xl shadow-2xl"
               />
             </div>
