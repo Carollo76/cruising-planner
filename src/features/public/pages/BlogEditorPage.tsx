@@ -17,7 +17,7 @@ function slugify(title: string): string {
 }
 
 const AVAILABLE_PHOTOS = [
-  '/photos/01-hero-well-adjusted-at-mooring.jpeg',
+  '/photos/09-dressed-ship-sunset.jpeg',
   '/photos/02-bow-at-dock.jpeg',
   '/photos/03-stern-new-york-ny.jpeg',
   '/photos/04-family-in-cockpit.jpeg',

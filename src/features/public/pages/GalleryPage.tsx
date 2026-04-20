@@ -9,14 +9,9 @@ interface Photo {
 
 const photos: Photo[] = [
   {
-    src: '/photos/01-hero-well-adjusted-at-mooring.jpeg',
-    alt: 'Well Adjusted on the mooring at sunrise',
-    caption: 'On the mooring at Centerport YC, early morning light',
-  },
-  {
     src: '/photos/09-dressed-ship-sunset.jpeg',
-    alt: 'Well Adjusted dressed with signal flags',
-    caption: 'Dressed ship at sunset',
+    alt: 'Well Adjusted dressed with signal flags at sunset',
+    caption: 'Dressed ship at golden hour',
   },
   {
     src: '/photos/02-bow-at-dock.jpeg',
