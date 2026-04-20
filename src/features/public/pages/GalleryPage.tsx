@@ -9,6 +9,11 @@ interface Photo {
 
 const photos: Photo[] = [
   {
+    src: '/photos/01-well-adjusted-profile.jpeg',
+    alt: 'Well Adjusted full profile on the mooring',
+    caption: 'On the mooring at Northport Harbor',
+  },
+  {
     src: '/photos/09-dressed-ship-sunset.jpeg',
     alt: 'Well Adjusted dressed with signal flags at sunset',
     caption: 'Dressed ship at golden hour',
