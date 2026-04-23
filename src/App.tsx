@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 
 // Public site layout & pages
 import { PublicLayout } from './components/public/PublicLayout';
@@ -46,7 +47,9 @@ import { TripSummaryPage } from './features/logbook/pages/TripSummaryPage';
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <Analytics />
+      <Routes>
       {/* Public S/V Well Adjusted website */}
       <Route element={<PublicLayout />}>
         <Route index element={<HomePage />} />
@@ -98,6 +101,7 @@ export default function App() {
         <Route path="logbook/:id" element={<LogEntryDetailPage />} />
         <Route path="logbook/:id/edit" element={<LogEntryEditorPage />} />
       </Route>
-    </Routes>
+      </Routes>
+    </>
   );
 }
