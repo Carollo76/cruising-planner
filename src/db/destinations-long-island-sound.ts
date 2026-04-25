@@ -13,7 +13,7 @@ export const LONG_ISLAND_SOUND_DESTINATIONS: Destination[] = [
     id: 'lis-centerport-yc',
     name: 'Centerport Yacht Club ⚓ Home',
     type: 'yacht-club',
-    position: { lat: 40.9055, lng: -73.3565 },
+    position: { lat: 40.9015, lng: -73.3592 },
     region: 'new-england',
     description:
       'Home yacht club. Located on the east side of the peninsula in Northport Harbor (not Centerport Harbor, despite the name). Guest moorings, launch service, reciprocal privileges.',
@@ -34,7 +34,7 @@ export const LONG_ISLAND_SOUND_DESTINATIONS: Destination[] = [
     id: 'lis-huntington-yc',
     name: 'Huntington Yacht Club',
     type: 'yacht-club',
-    position: { lat: 40.9130, lng: -73.4285 },
+    position: { lat: 40.8963, lng: -73.4211 },
     region: 'new-england',
     description:
       'Historic yacht club on Huntington Harbor with guest moorings, launch, and full dining. Reciprocal.',

@@ -15,8 +15,8 @@ export interface HomePort {
 /** Centerport Yacht Club, Northport Harbor, NY — home base */
 export const DEFAULT_HOME_PORT: HomePort = {
   name: 'Centerport Yacht Club',
-  lat: 40.9055,
-  lng: -73.3565,
+  lat: 40.9015,
+  lng: -73.3592,
   zoom: 13,
 };
 
