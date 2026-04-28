@@ -1,14 +1,17 @@
 import type { Position } from '../types/navigation';
+import { db } from '../db/database';
 
 /** Windy Point Forecast API client.
  *  Docs: https://api.windy.com/point-forecast/docs
  *
- *  CRITICAL: All API responses are cached for 30 minutes. This prevents:
+ *  CRITICAL: All API responses are cached for 2 hours. This prevents:
  *  - Inconsistent results when the user presses "Assess" or "Find windows" multiple times
  *  - Wasted API calls (1,000/day limit)
  *  - Data changing between the wind fetch and wave fetch within the same assessment
  *
- *  The cache is keyed by rounded lat/lng + model, so nearby points reuse the same forecast. */
+ *  Two-tier cache: in-memory Map (L1, fast) backed by Dexie windyCache table (L2, persistent).
+ *  L2 means refreshing the page does NOT trigger fresh API calls — same forecast persists across
+ *  sessions until expiry. The cache is keyed by rounded lat/lng + model. */
 
 const WINDY_ENDPOINT = 'https://api.windy.com/api/point-forecast/v2';
 const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours — GFS model updates every 6h, no point re-fetching sooner
@@ -73,6 +76,14 @@ interface CacheEntry {
   expiresAt: number;
 }
 
+/** Persisted shape stored in Dexie windyCache table. */
+export interface WindyCacheEntry {
+  key: string;
+  forecast: WindyForecast;
+  expiresAt: number;
+  fetchedAt: number;
+}
+
 const forecastCache = new Map<string, CacheEntry>();
 
 /** Round lat/lng to 2 decimal places (~1.1 km) for cache deduplication.
@@ -82,7 +93,8 @@ function cacheKey(lat: number, lng: number, model: string): string {
   return `${lat.toFixed(2)},${lng.toFixed(2)},${model}`;
 }
 
-function getCached(key: string): WindyForecast | null {
+/** L1 (in-memory) lookup. Synchronous fast path. */
+function getMemCached(key: string): WindyForecast | null {
   const entry = forecastCache.get(key);
   if (!entry) return null;
   if (Date.now() > entry.expiresAt) {
@@ -92,13 +104,43 @@ function getCached(key: string): WindyForecast | null {
   return entry.forecast;
 }
 
-function setCache(key: string, forecast: WindyForecast): void {
-  forecastCache.set(key, { forecast, expiresAt: Date.now() + CACHE_TTL_MS });
+/** L1 + L2 lookup. Falls back to Dexie if Map is empty (e.g. after page reload). */
+async function getCached(key: string): Promise<WindyForecast | null> {
+  const mem = getMemCached(key);
+  if (mem) return mem;
+
+  try {
+    const row = await db.windyCache.get(key);
+    if (!row) return null;
+    if (Date.now() > row.expiresAt) {
+      await db.windyCache.delete(key).catch(() => {});
+      return null;
+    }
+    forecastCache.set(key, { forecast: row.forecast, expiresAt: row.expiresAt });
+    return row.forecast;
+  } catch {
+    return null;
+  }
 }
 
-/** Clear the entire forecast cache. Call when user wants fresh data. */
-export function clearWindyCache(): void {
+function setCache(key: string, forecast: WindyForecast): void {
+  const expiresAt = Date.now() + CACHE_TTL_MS;
+  forecastCache.set(key, { forecast, expiresAt });
+  // Fire-and-forget DB write — failures must not block the caller, but log them so we
+  // notice if persistence quietly stops working (the whole point of this cache is determinism).
+  db.windyCache
+    .put({ key, forecast, expiresAt, fetchedAt: forecast.fetchedAt })
+    .catch((err) => console.error('[windyCache] persist failed', err));
+}
+
+/** Clear the entire forecast cache (both tiers). Call when user wants fresh data. */
+export async function clearWindyCache(): Promise<void> {
   forecastCache.clear();
+  try {
+    await db.windyCache.clear();
+  } catch (err) {
+    console.error('[windyCache] clear failed', err);
+  }
 }
 
 /** Timestamp of the most recent API fetch, or null. Used to show "data from X:XX" in UI. */
@@ -148,7 +190,7 @@ export async function fetchWindyPointForecast(
   if (!apiKey) throw new Error('Windy API key not configured');
 
   const key = cacheKey(position.lat, position.lng, model);
-  const cached = getCached(key);
+  const cached = await getCached(key);
   if (cached) return cached;
 
   const data = await fetchWithRetry({
@@ -176,7 +218,7 @@ export async function fetchWindyWaves(
   if (!apiKey) throw new Error('Windy API key not configured');
 
   const key = cacheKey(position.lat, position.lng, 'gfsWave');
-  const cached = getCached(key);
+  const cached = await getCached(key);
   if (cached) return cached;
 
   try {

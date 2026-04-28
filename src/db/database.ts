@@ -8,6 +8,7 @@ import type { CrewMember, WatchSchedule } from '../types/crew';
 import type { ProvisionPlan } from '../types/provisioning';
 import type { LogEntry } from '../types/logbook';
 import type { BlogPost } from '../types/blog';
+import type { WindyCacheEntry } from '../services/windy-weather';
 
 export class CruisingPlannerDB extends Dexie {
   trips!: Table<Trip>;
@@ -25,6 +26,7 @@ export class CruisingPlannerDB extends Dexie {
   tideCache!: Table<TidePrediction>;
   boatConfigs!: Table<BoatConfig>;
   blogPosts!: Table<BlogPost>;
+  windyCache!: Table<WindyCacheEntry>;
 
   constructor() {
     super('CruisingPlannerDB');
@@ -46,6 +48,9 @@ export class CruisingPlannerDB extends Dexie {
     });
     this.version(2).stores({
       blogPosts: 'id, slug, status, publishedAt',
+    });
+    this.version(3).stores({
+      windyCache: 'key, expiresAt, fetchedAt',
     });
   }
 }

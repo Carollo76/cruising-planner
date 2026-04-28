@@ -333,8 +333,8 @@ export function TripAssessmentPage() {
                 Results are locked until you refresh.
               </p>
               <button
-                onClick={() => {
-                  clearWindyCache();
+                onClick={async () => {
+                  await clearWindyCache();
                   setAssessment(null);
                   setWindows([]);
                   setError(null);
