@@ -18,4 +18,5 @@ export const BENETEAU_OCEANIS_37: BoatConfig = {
   maxSpeedKnots: 7.5,
   sleeperCapacity: 6,
   hullType: 'monohull',
+  hullColor: 'White',
 };

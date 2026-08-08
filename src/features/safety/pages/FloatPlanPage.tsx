@@ -76,6 +76,11 @@ const SWIMMING_ABILITIES: FloatPlanCrew['swimmingAbility'][] = [
 
 /* ──────────────────────────── helpers ──────────────────────────── */
 
+/** Stable id per trip so re-saving updates the same plan instead of piling up copies. */
+function floatPlanId(tripId?: string): string {
+  return tripId ? `floatplan-${tripId}` : 'floatplan-default';
+}
+
 function formatDuration(hours: number): string {
   const h = Math.floor(hours);
   const m = Math.round((hours - h) * 60);
@@ -118,11 +123,13 @@ function Section({
 export function FloatPlanPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { boatConfig } = useSettingsStore();
+  const { boatConfig, setBoatConfig } = useSettingsStore();
 
   /* ── loading state ── */
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
 
@@ -228,6 +235,7 @@ export function FloatPlanPage() {
         setVesselMakeModel(`${boatConfig.make} ${boatConfig.model}`.trim());
         setLoa(boatConfig.loa ? String(boatConfig.loa) : '');
         setDraft(boatConfig.draft ? String(boatConfig.draft) : '');
+        setHullColor(boatConfig.hullColor || 'White');
         setRegistrationNumber(boatConfig.registrationNumber || '');
         setHailingPort(boatConfig.hailingPort || '');
         setMmsi(boatConfig.mmsi || '');
@@ -278,6 +286,32 @@ export function FloatPlanPage() {
               swimmingAbility: 'strong' as const,
             }))
           );
+        }
+
+        // ── Restore a previously saved plan, overriding the auto-populated defaults ──
+        // Without this the page could only ever be re-derived from boat/trip/route, so
+        // everything typed here (crew, safety counts, shore contact) came back blank.
+        const existing = await db.floatPlans.get(floatPlanId(foundTrip?.id));
+        if (existing) {
+          setVesselName(existing.vesselName);
+          setHailingPort(existing.hailingPort);
+          if (existing.mmsi) setMmsi(existing.mmsi);
+          setDeparturePoint(existing.departurePoint);
+          setDepartureTime(existing.departureTime);
+          setDestinationPoint(existing.destinationPoint);
+          setEstimatedArrival(existing.estimatedArrival);
+          setRouteDescription(existing.routeDescription);
+          setEngineType(existing.engineType);
+          if (existing.fuelCapacity) setFuelCapacity(String(existing.fuelCapacity));
+          if (existing.waterCapacity) setWaterCapacity(String(existing.waterCapacity));
+          setSafety(existing.safetyEquipment);
+          setCommEquipment(existing.communicationEquipment);
+          setShoreContact(existing.shoreContact);
+          setCrew(existing.crew.map((c) => ({ ...c, _id: uuid() })));
+          if (existing.emergencyContacts.length > 0) {
+            setEmergencyContacts(existing.emergencyContacts.map((c) => ({ ...c, _id: uuid() })));
+          }
+          setSavedAt(existing.generatedAt);
         }
       } catch (err) {
         console.error('FloatPlan load error:', err);
@@ -441,9 +475,31 @@ export function FloatPlanPage() {
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
+      // Vessel details belong to the boat, not to one float plan. Persist them back to
+      // Boat Config so they are pre-filled everywhere and never need retyping.
+      const [make, ...modelParts] = vesselMakeModel.trim().split(' ');
+      setBoatConfig({
+        ...boatConfig,
+        name: vesselName || boatConfig.name,
+        make: make || boatConfig.make,
+        model: modelParts.join(' ') || boatConfig.model,
+        loa: parseFloat(loa) || boatConfig.loa,
+        draft: parseFloat(draft) || boatConfig.draft,
+        fuelCapacityGallons: parseFloat(fuelCapacity) || boatConfig.fuelCapacityGallons,
+        waterCapacityGallons: parseFloat(waterCapacity) || boatConfig.waterCapacityGallons,
+        cruisingSpeedKnots: parseFloat(cruisingSpeed) || boatConfig.cruisingSpeedKnots,
+        registrationNumber: registrationNumber || undefined,
+        hailingPort: hailingPort || undefined,
+        mmsi: mmsi || undefined,
+        callSign: callSign || undefined,
+        hullColor: hullColor || undefined,
+      });
+
       const plan: FloatPlan = {
-        id: uuid(),
+        // Stable per trip — re-saving updates this plan rather than creating a duplicate.
+        id: floatPlanId(trip?.id),
         tripId: trip?.id,
         vesselName,
         vesselDescription: `${vesselMakeModel}, LOA ${loa} ft, ${hullColor}`,
@@ -466,7 +522,14 @@ export function FloatPlanPage() {
         generatedAt: Date.now(),
       };
       await db.floatPlans.put(plan);
+      // Read back before reporting success — a float plan that only looks saved is a
+      // safety problem, since this is the document shore contacts rely on.
+      if (!(await db.floatPlans.get(plan.id))) {
+        throw new Error('the plan was written but could not be read back from local storage');
+      }
+      setSavedAt(plan.generatedAt);
     } catch (err) {
+      setSaveError(`Could not save this float plan: ${(err as Error).message}`);
       console.error('Save float plan error:', err);
     } finally {
       setSaving(false);
@@ -576,7 +639,7 @@ export function FloatPlanPage() {
   /* ──────────────────────────── Render ──────────────────────────── */
 
   return (
-    <div className="min-h-screen pb-32">
+    <div className="min-h-screen pb-48">
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/90 px-4 py-3 backdrop-blur">
         <div className="flex items-center gap-3">
@@ -601,6 +664,10 @@ export function FloatPlanPage() {
       <div className="mx-auto max-w-2xl space-y-4 p-4">
         {/* ═══════ Section 1: Vessel Information ═══════ */}
         <Section title="Vessel Information" icon={Sailboat} iconColor="text-sea-400">
+          <p className="mb-3 text-xs text-slate-500">
+            Pre-filled from Boat Config. Anything you change here is saved back to Boat Config when
+            you save this plan, so you only enter it once.
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">
               <label className={LABEL}>Vessel Name</label>
@@ -1089,7 +1156,20 @@ export function FloatPlanPage() {
       </div>
 
       {/* ═══════ Bottom Actions (fixed) ═══════ */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-800 bg-slate-950/95 px-4 py-3 pb-safe backdrop-blur">
+      {/* Sits directly above the bottom nav. Previously bottom-0/z-20, which put it
+          underneath the z-50 nav — the Save button was invisible and untappable. */}
+      <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 border-t border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
+        {saveError && (
+          <p className="mx-auto mb-2 max-w-2xl rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            {saveError}
+          </p>
+        )}
+        {!saveError && savedAt && (
+          <p className="mx-auto mb-2 max-w-2xl text-center text-xs text-green-400">
+            Saved {format(new Date(savedAt), 'MMM d, h:mm a')} — vessel details also stored in Boat
+            Config
+          </p>
+        )}
         <div className="mx-auto flex max-w-2xl gap-2">
           <button
             type="button"

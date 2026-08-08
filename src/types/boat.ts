@@ -21,4 +21,6 @@ export interface BoatConfig {
   hailingPort?: string;
   mmsi?: string;
   callSign?: string;
+  /** Hull colour, used on the float plan for search-and-rescue identification. */
+  hullColor?: string;
 }
