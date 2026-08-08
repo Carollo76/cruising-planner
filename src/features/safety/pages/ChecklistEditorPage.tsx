@@ -43,7 +43,7 @@ export function ChecklistEditorPage() {
       try {
         const cl = await db.checklists.get(id!);
         if (!cl) {
-          navigate('/safety/checklists', { replace: true });
+          navigate('/planner/safety/checklists', { replace: true });
           return;
         }
         setName(cl.name);

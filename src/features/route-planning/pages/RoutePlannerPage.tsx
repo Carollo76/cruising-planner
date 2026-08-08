@@ -62,6 +62,35 @@ export function RoutePlannerPage({ mode = 'create' }: RoutePlannerPageProps) {
   const [crewSize, setCrewSize] = useState(4);
   const [existingRouteId, setExistingRouteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(mode === 'edit');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedRouteIds, setSavedRouteIds] = useState<Set<string>>(new Set());
+
+  /** True once there is real work on the chart that has not been written to IndexedDB. */
+  const hasUnsavedWork = waypoints.length > 0 && !savedRouteIds.has(existingRouteId ?? '');
+
+  // A route lives only in component state until Save is pressed. Reloading or closing
+  // the tab mid-plan silently discarded it, so warn first.
+  useEffect(() => {
+    if (!hasUnsavedWork) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasUnsavedWork]);
+
+  const leavePlanner = (to: string) => {
+    if (
+      hasUnsavedWork &&
+      !confirm(
+        `This route has ${waypoints.length} waypoint${waypoints.length === 1 ? '' : 's'} that ` +
+          `${waypoints.length < 2 ? 'cannot be saved yet (a route needs at least 2) ' : 'have not been saved '}` +
+          `and will be lost. Leave anyway?`
+      )
+    ) {
+      return;
+    }
+    navigate(to);
+  };
 
   // Load existing route if in edit mode
   useEffect(() => {
@@ -148,6 +177,23 @@ export function RoutePlannerPage({ mode = 'create' }: RoutePlannerPageProps) {
   const totalWater = totalDays * crewSize * 1.0; // 1 gal per person per day
 
   const saveRoute = async () => {
+    setSaveError(null);
+    setSaving(true);
+    try {
+      await writeRoute();
+    } catch (err) {
+      // Never fail silently — a route that looks saved but isn't is a safety problem.
+      setSaveError(
+        `Could not save this route: ${(err as Error).message}. ` +
+          `Your waypoints are still on the chart — export a GPX to be safe.`
+      );
+      console.error('Route save failed', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const writeRoute = async () => {
     const id = existingRouteId ?? uuid();
     const wps = waypoints.map((w) => ({ ...w, routeId: id }));
     const now = Date.now();
@@ -176,6 +222,14 @@ export function RoutePlannerPage({ mode = 'create' }: RoutePlannerPageProps) {
     };
 
     await db.routes.put(route);
+
+    // Read it back before claiming success — a write that never lands must not look like it did.
+    const persisted = await db.routes.get(id);
+    if (!persisted) {
+      throw new Error('the route was written but could not be read back from local storage');
+    }
+    setExistingRouteId(id);
+    setSavedRouteIds((prev) => new Set(prev).add(id));
 
     // If launched from a trip page, auto-link this route to that trip
     if (tripIdParam) {
@@ -226,7 +280,9 @@ export function RoutePlannerPage({ mode = 'create' }: RoutePlannerPageProps) {
       <div className="border-b border-slate-800 bg-slate-900 px-3 py-2">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate(tripIdParam ? `/trips/${tripIdParam}` : '/routes')}
+            onClick={() =>
+              leavePlanner(tripIdParam ? `/planner/trips/${tripIdParam}` : '/planner/routes')
+            }
             className="shrink-0 rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
             aria-label="Back"
           >
@@ -241,13 +297,37 @@ export function RoutePlannerPage({ mode = 'create' }: RoutePlannerPageProps) {
           />
           <button
             onClick={saveRoute}
-            disabled={waypoints.length < 2}
+            disabled={waypoints.length < 2 || saving}
+            title={
+              waypoints.length < 2
+                ? 'Tap the chart to add at least 2 waypoints before saving'
+                : 'Save this route'
+            }
             className="flex items-center gap-1.5 rounded bg-sea-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sea-700 disabled:opacity-40"
           >
             <Save className="h-4 w-4" />
-            Save
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
+
+        {/* Say why Save is unavailable rather than just dimming it */}
+        {waypoints.length < 2 && (
+          <p className="mt-1.5 text-xs text-amber-400">
+            {waypoints.length === 0
+              ? 'Tap the chart to drop waypoints. A route needs at least 2 to be saved.'
+              : 'Add 1 more waypoint — a route needs at least 2 before it can be saved.'}
+          </p>
+        )}
+
+        {saveError && (
+          <p className="mt-1.5 rounded border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-xs text-red-300">
+            {saveError}
+          </p>
+        )}
+
+        {hasUnsavedWork && waypoints.length >= 2 && (
+          <p className="mt-1.5 text-xs text-amber-400">Unsaved changes — press Save to keep this route.</p>
+        )}
 
         <div className="mt-2 flex items-center gap-1 overflow-x-auto">
           <button

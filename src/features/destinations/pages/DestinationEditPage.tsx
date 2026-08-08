@@ -259,7 +259,7 @@ export function DestinationEditPage() {
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-slate-800 bg-slate-900/95 p-3 backdrop-blur-sm">
         <button
-          onClick={() => navigate(isNew ? '/destinations' : `/destinations/${id}`)}
+          onClick={() => navigate(isNew ? '/planner/destinations' : `/planner/destinations/${id}`)}
           className="rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
         >
           <ArrowLeft className="h-4 w-4" />

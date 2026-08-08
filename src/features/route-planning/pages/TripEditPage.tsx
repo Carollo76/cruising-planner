@@ -26,6 +26,8 @@ export function TripEditPage() {
 
   const [availableRoutes, setAvailableRoutes] = useState<Route[]>([]);
   const [availableCrew, setAvailableCrew] = useState<CrewMember[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     db.routes.toArray().then(setAvailableRoutes);
@@ -48,7 +50,8 @@ export function TripEditPage() {
     }
   }, [id, isNew]);
 
-  const save = async () => {
+  /** Writes the trip and confirms it landed. Returns the id, or throws. */
+  const writeTrip = async (): Promise<string> => {
     const tripId = isNew ? uuid() : id!;
     const now = Date.now();
     const trip: Trip = {
@@ -64,28 +67,31 @@ export function TripEditPage() {
       updatedAt: now,
     };
     await db.trips.put(trip);
-    navigate(`/planner/trips/${tripId}`);
+    // Read back before navigating — never report a save that didn't land.
+    if (!(await db.trips.get(tripId))) {
+      throw new Error('the trip was written but could not be read back from local storage');
+    }
+    return tripId;
   };
 
-  /** Save trip first, then open route planner with trip linkage */
-  const saveAndCreateRoute = async () => {
-    const tripId = isNew ? uuid() : id!;
-    const now = Date.now();
-    const trip: Trip = {
-      id: tripId,
-      name: name.trim() || 'Untitled Trip',
-      startDate,
-      endDate,
-      routeIds,
-      crewIds,
-      status,
-      notes: notes.trim() || undefined,
-      createdAt: isNew ? now : createdAt,
-      updatedAt: now,
-    };
-    await db.trips.put(trip);
-    navigate(`/planner/routes/new?tripId=${tripId}`);
+  const runSave = async (destination: (tripId: string) => string) => {
+    setSaveError(null);
+    setSaving(true);
+    try {
+      const tripId = await writeTrip();
+      navigate(destination(tripId));
+    } catch (err) {
+      setSaveError(`Could not save this trip: ${(err as Error).message}`);
+      console.error('Trip save failed', err);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const save = () => runSave((tripId) => `/planner/trips/${tripId}`);
+
+  /** Save trip first, then open route planner with trip linkage */
+  const saveAndCreateRoute = () => runSave((tripId) => `/planner/routes/new?tripId=${tripId}`);
 
   const toggleRoute = (rid: string) => {
     setRouteIds((prev) => (prev.includes(rid) ? prev.filter((x) => x !== rid) : [...prev, rid]));
@@ -107,7 +113,7 @@ export function TripEditPage() {
     <div className="p-4">
       <div className="mb-4 flex items-center gap-2">
         <button
-          onClick={() => navigate(isNew ? '/trips' : `/trips/${id}`)}
+          onClick={() => navigate(isNew ? '/planner/trips' : `/planner/trips/${id}`)}
           className="rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -115,13 +121,27 @@ export function TripEditPage() {
         <h2 className="flex-1 text-xl font-semibold">{isNew ? 'New Trip' : 'Edit Trip'}</h2>
         <button
           onClick={save}
-          disabled={!name.trim()}
+          disabled={!name.trim() || saving}
+          title={!name.trim() ? 'Give the trip a name before saving' : 'Save this trip'}
           className="flex items-center gap-1.5 rounded-lg bg-sea-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-sea-700 disabled:opacity-40"
         >
           <Save className="h-4 w-4" />
-          Save
+          {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
+
+      {/* Say why Save is unavailable rather than just dimming it */}
+      {!name.trim() && (
+        <p className="mb-3 text-xs text-amber-400">
+          Enter a trip name above — Save stays disabled until the trip has a name.
+        </p>
+      )}
+
+      {saveError && (
+        <p className="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+          {saveError}
+        </p>
+      )}
 
       <div className="space-y-5">
         <div>

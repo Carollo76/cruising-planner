@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 
 // Public site layout & pages
@@ -44,6 +44,35 @@ import { LogbookPage } from './features/logbook/pages/LogbookPage';
 import { LogEntryEditorPage } from './features/logbook/pages/LogEntryEditorPage';
 import { LogEntryDetailPage } from './features/logbook/pages/LogEntryDetailPage';
 import { TripSummaryPage } from './features/logbook/pages/TripSummaryPage';
+
+/** Planner sections that used to live at the root before everything moved under /planner. */
+const LEGACY_PLANNER_SEGMENTS = new Set([
+  'routes',
+  'trips',
+  'destinations',
+  'safety',
+  'weather',
+  'logbook',
+  'provisioning',
+  'watch',
+  'boat',
+  'more',
+]);
+
+/**
+ * Catch-all. Old bookmarks and any stray un-prefixed link (e.g. /trips/:id) used to
+ * match nothing and render a blank screen with no nav — a hard dead end. Send those
+ * to their /planner equivalent, and anything else back to the public home page.
+ */
+function NotFoundRedirect() {
+  const { pathname, search, hash } = useLocation();
+  const firstSegment = pathname.split('/')[1] ?? '';
+
+  if (LEGACY_PLANNER_SEGMENTS.has(firstSegment)) {
+    return <Navigate to={`/planner${pathname}${search}${hash}`} replace />;
+  }
+  return <Navigate to="/" replace />;
+}
 
 export default function App() {
   return (
@@ -101,6 +130,8 @@ export default function App() {
         <Route path="logbook/:id" element={<LogEntryDetailPage />} />
         <Route path="logbook/:id/edit" element={<LogEntryEditorPage />} />
       </Route>
+
+      <Route path="*" element={<NotFoundRedirect />} />
       </Routes>
     </>
   );
