@@ -286,6 +286,21 @@ Persisted via Zustand `persist` middleware under key `cruising-planner-settings`
 - Large touch targets for boat use (checkboxes 28px, buttons minimum 44px)
 - Font: 16-18px base for readability on moving boat
 
+## Deployment (Vercel)
+
+- Deploys automatically on push to `main` (GitHub integration). Live at `www.sailwelladjusted.us`.
+- **`vercel.json` is required — do not delete it.** It supplies the SPA fallback rewrite. Vercel's
+  Vite preset does *not* add one, so without this file every path except `/` returns a hard 404
+  from the edge (deep links, reloads, and shared URLs all break). This was removed once in
+  `a72ef29` and went unnoticed for months, because the first load lands on `/`, all later
+  navigation is client-side, and the service worker's `navigateFallback` masks ordinary reloads —
+  only a *hard* reload exposes the 404.
+- Use `rewrites`, never the legacy `routes` array. Rewrites are evaluated *after* the filesystem
+  check, so `/assets`, `/photos`, `sw.js` and the manifest keep serving themselves. Earlier
+  `routes`-based configs kept shadowing static assets (`fa0b29b`, `86a8645`).
+- Verify a deploy with deep links, not just the home page:
+  `curl -o /dev/null -w '%{http_code}' https://www.sailwelladjusted.us/planner/trips/new`
+
 ## Development Notes
 
 - `npm install --legacy-peer-deps` needed for vite-plugin-pwa (peer dep mismatch with Vite 8)
