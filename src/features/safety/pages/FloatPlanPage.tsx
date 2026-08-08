@@ -1158,7 +1158,7 @@ export function FloatPlanPage() {
       {/* ═══════ Bottom Actions (fixed) ═══════ */}
       {/* Sits directly above the bottom nav. Previously bottom-0/z-20, which put it
           underneath the z-50 nav — the Save button was invisible and untappable. */}
-      <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 border-t border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
+      <div className="above-bottom-nav fixed left-0 right-0 z-40 border-t border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
         {saveError && (
           <p className="mx-auto mb-2 max-w-2xl rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
             {saveError}

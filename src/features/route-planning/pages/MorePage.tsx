@@ -36,6 +36,11 @@ export function MorePage() {
           </Link>
         ))}
       </div>
+
+      {/* Identifies the running build, so a stale cached copy is obvious at a glance. */}
+      <p className="mt-6 text-center text-xs text-slate-600">
+        Build {new Date(__BUILD_TIME__).toLocaleString()}
+      </p>
     </div>
   );
 }

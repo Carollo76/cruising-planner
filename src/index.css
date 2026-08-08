@@ -115,3 +115,13 @@
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* Pins a fixed action bar just above the bottom nav.
+   The plain `bottom` comes first so that if a browser cannot resolve env(),
+   the calc() below is simply ignored and the bar still lands above the nav —
+   without it an unresolved env() invalidates `bottom` entirely, which drops
+   the bar to `bottom: auto` and parks it off the bottom of the viewport. */
+.above-bottom-nav {
+  bottom: 4rem;
+  bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
