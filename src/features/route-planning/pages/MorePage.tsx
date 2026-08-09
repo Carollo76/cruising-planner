@@ -6,6 +6,7 @@ import {
   Clock,
   ShoppingCart,
   BookOpen,
+  DatabaseBackup,
 } from 'lucide-react';
 
 const moreItems = [
@@ -15,6 +16,7 @@ const moreItems = [
   { to: '/planner/watch', icon: Clock, label: 'Watch Schedule', description: 'Overnight watch rotation' },
   { to: '/planner/provisioning', icon: ShoppingCart, label: 'Provisioning', description: 'Meals, water, fuel planning' },
   { to: '/planner/logbook', icon: BookOpen, label: 'Logbook', description: 'Digital voyage log' },
+  { to: '/planner/backup', icon: DatabaseBackup, label: 'Backup & Restore', description: 'Export or import all your data — move it between browsers' },
 ];
 
 export function MorePage() {

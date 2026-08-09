@@ -22,6 +22,7 @@ import { TripDetailPage } from './features/route-planning/pages/TripDetailPage';
 import { TripEditPage } from './features/route-planning/pages/TripEditPage';
 import { BoatConfigPage } from './features/route-planning/pages/BoatConfigPage';
 import { MorePage } from './features/route-planning/pages/MorePage';
+import { BackupPage } from './features/route-planning/pages/BackupPage';
 import { WeatherDashboard } from './features/weather/pages/WeatherDashboard';
 import { TripAssessmentPage } from './features/weather/pages/TripAssessmentPage';
 import { DestinationListPage } from './features/destinations/pages/DestinationListPage';
@@ -117,6 +118,7 @@ export default function App() {
         <Route path="safety/mob" element={<MOBPage />} />
         <Route path="more" element={<MorePage />} />
         <Route path="boat" element={<BoatConfigPage />} />
+        <Route path="backup" element={<BackupPage />} />
         <Route path="crew" element={<CrewListPage />} />
         <Route path="watch" element={<WatchSchedulePage />} />
         <Route path="provisioning" element={<ProvisioningPage />} />
