@@ -149,22 +149,36 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'cruising-planner-settings',
-      version: 1,
+      version: 2,
       /**
        * v0 stored a single `boatConfig` and no fleet. Seed the fleet from whatever boat
        * the user already had so their vessel details carry over untouched.
        */
       migrate: (persisted, version) => {
-        const state = (persisted ?? {}) as Partial<SettingsState>;
-        if (version >= 1 && state.boats?.length) return state as SettingsState;
+        let state = (persisted ?? {}) as Partial<SettingsState>;
 
-        const current = state.boatConfig ?? BENETEAU_OCEANIS_37;
-        return {
-          ...state,
-          boats: [current],
-          activeBoatId: current.id,
-          boatConfig: current,
-        } as SettingsState;
+        // v0 -> v1: seed the fleet from the single boat the user already had.
+        if (version < 1 || !state.boats?.length) {
+          const current = state.boatConfig ?? BENETEAU_OCEANIS_37;
+          state = { ...state, boats: [current], activeBoatId: current.id, boatConfig: current };
+        }
+
+        // v1 -> v2: the shipped default draft was the deep-keel 5.9 ft; this boat is the
+        // 4.5 ft shoal keel. Correct only boats still carrying the untouched wrong default,
+        // so a draft the user set deliberately is never overwritten.
+        if (version < 2) {
+          const isStaleDefault = (b: BoatConfig) =>
+            b.draft === 5.9 && b.make === 'Beneteau' && b.model === 'Oceanis 37';
+          const fix = (b: BoatConfig): BoatConfig => (isStaleDefault(b) ? { ...b, draft: 4.5 } : b);
+          const boats = (state.boats ?? []).map(fix);
+          state = {
+            ...state,
+            boats,
+            boatConfig: state.boatConfig ? fix(state.boatConfig) : state.boatConfig,
+          };
+        }
+
+        return state as SettingsState;
       },
     }
   )

@@ -9,6 +9,7 @@ import type { ProvisionPlan } from '../types/provisioning';
 import type { LogEntry } from '../types/logbook';
 import type { BlogPost } from '../types/blog';
 import type { WindyCacheEntry } from '../services/windy-weather';
+import type { CurrentPredictionRecord } from '../types/currents';
 
 export class CruisingPlannerDB extends Dexie {
   trips!: Table<Trip>;
@@ -27,6 +28,7 @@ export class CruisingPlannerDB extends Dexie {
   boatConfigs!: Table<BoatConfig>;
   blogPosts!: Table<BlogPost>;
   windyCache!: Table<WindyCacheEntry>;
+  currentPredictions!: Table<CurrentPredictionRecord>;
 
   constructor() {
     super('CruisingPlannerDB');
@@ -51,6 +53,12 @@ export class CruisingPlannerDB extends Dexie {
     });
     this.version(3).stores({
       windyCache: 'key, expiresAt, fetchedAt',
+    });
+    // Tidal current predictions, cached per station/bin/interval/day so gate timing works
+    // offline. Separate from tideCache, which stores water *heights* — the old code wrote
+    // current speeds into tideCache's `height` field, which this replaces.
+    this.version(4).stores({
+      currentPredictions: 'key, stationId, dateKey, fetchedAt, [stationId+dateKey]',
     });
   }
 }
