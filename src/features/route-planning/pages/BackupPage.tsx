@@ -28,6 +28,7 @@ import {
   downloadBackupFile,
   revokeAccess,
   hasLiveToken,
+  preloadGoogleSignIn,
   type DriveBackupFile,
 } from '../../../services/google-drive';
 
@@ -113,6 +114,10 @@ export function BackupPage() {
       .catch((err) => setError(`Could not read local data: ${(err as Error).message}`));
 
     navigator.storage?.persisted?.().then(setPersisted).catch(() => setPersisted(null));
+
+    // Get Google's script in place before the user can click Connect, so the popup
+    // opens synchronously within the click and the browser does not block it.
+    preloadGoogleSignIn();
   }, []);
 
   const totalRecords = contents.reduce((sum, r) => sum + r.count, 0);

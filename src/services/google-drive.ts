@@ -45,6 +45,24 @@ declare global {
 
 let gisPromise: Promise<void> | null = null;
 
+/**
+ * Loads Google's script ahead of time.
+ *
+ * Critical for the popup to survive: browsers only allow a popup that opens during the
+ * synchronous run of a user gesture. Awaiting the script download inside the click
+ * handler pushes requestAccessToken() past that window, so Chrome silently blocks the
+ * window and GIS reports it back as `popup_closed`. Calling this on mount means the
+ * click handler can reach requestAccessToken() with no await in front of it.
+ */
+export function preloadGoogleSignIn(): void {
+  void loadGis().catch(() => undefined);
+}
+
+/** True once the Google script is ready and a popup can be opened synchronously. */
+export function isGisReady(): boolean {
+  return !!window.google?.accounts?.oauth2;
+}
+
 function loadGis(): Promise<void> {
   if (window.google?.accounts?.oauth2) return Promise.resolve();
   if (gisPromise) return gisPromise;
@@ -89,34 +107,59 @@ export function forgetToken(): void {
  * the user has already consented and still has a Google session — that path is used for
  * automatic backups and must never pop a window unexpectedly.
  */
-export async function getAccessToken(
+export function getAccessToken(
   clientId: string,
   { interactive }: { interactive: boolean }
 ): Promise<string> {
-  if (hasLiveToken()) return accessToken!;
-  if (!clientId) throw new Error('no Google client ID configured');
+  if (hasLiveToken()) return Promise.resolve(accessToken!);
+  if (!clientId) return Promise.reject(new Error('no Google client ID configured'));
 
-  await loadGis();
+  // Deliberately not `async`: when the script is already loaded this runs start to finish
+  // inside the click, which is the only way the browser will allow the popup.
+  if (!isGisReady()) {
+    return loadGis().then(() => requestToken(clientId, interactive));
+  }
+  return requestToken(clientId, interactive);
+}
 
+function requestToken(clientId: string, interactive: boolean): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: SCOPE,
       callback: (resp) => {
         if (resp.error || !resp.access_token) {
-          reject(new Error(resp.error ? `Google sign-in failed: ${resp.error}` : 'Google sign-in was dismissed'));
+          reject(new Error(describeAuthError(resp.error)));
           return;
         }
         accessToken = resp.access_token;
         tokenExpiresAt = Date.now() + (resp.expires_in ?? 3600) * 1000;
         resolve(accessToken);
       },
-      error_callback: (err) => reject(new Error(`Google sign-in failed: ${err.type ?? 'unknown error'}`)),
+      error_callback: (err) => reject(new Error(describeAuthError(err.type))),
     });
 
     // An empty prompt means "no UI unless you have to"; silent mode relies on it.
     client.requestAccessToken({ prompt: interactive ? 'consent' : '' });
   });
+}
+
+/** Turns Google's terse error codes into something actionable. */
+function describeAuthError(code?: string): string {
+  switch (code) {
+    case 'popup_closed':
+    case 'popup_failed_to_open':
+      return 'the Google sign-in window did not stay open — allow pop-ups for this site (the icon at the right of the address bar), then press Connect again';
+    case 'access_denied':
+      return 'Google refused access — add your own Gmail under Google Auth Platform → Audience → Test users, then try again';
+    case 'idpiframe_initialization_failed':
+      return 'Google rejected this site — check the Authorised JavaScript origin is exactly https://www.sailwelladjusted.us';
+    case undefined:
+    case '':
+      return 'Google sign-in was dismissed';
+    default:
+      return `Google sign-in failed: ${code}`;
+  }
 }
 
 export function revokeAccess(): void {
