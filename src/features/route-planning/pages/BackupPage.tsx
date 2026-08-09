@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, Upload, AlertTriangle, CheckCircle2, Database } from 'lucide-react';
+import {
+  ArrowLeft,
+  Download,
+  Upload,
+  AlertTriangle,
+  CheckCircle2,
+  Database,
+  Cloud,
+  CloudUpload,
+  RefreshCw,
+  LogOut,
+} from 'lucide-react';
 import {
   buildBackup,
   downloadBackup,
@@ -10,6 +21,15 @@ import {
   TABLE_LABELS,
   type BackedUpTable,
 } from '../utils/backup';
+import { useSettingsStore } from '../../../stores/settings-store';
+import { backupToDrive, fetchDriveBackups, lastBackupAt } from '../utils/drive-backup';
+import {
+  getAccessToken,
+  downloadBackupFile,
+  revokeAccess,
+  hasLiveToken,
+  type DriveBackupFile,
+} from '../../../services/google-drive';
 
 export function BackupPage() {
   const navigate = useNavigate();
@@ -22,6 +42,69 @@ export function BackupPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const [persisted, setPersisted] = useState<boolean | null>(null);
+
+  /* ── Google Drive ── */
+  const { apiKeys, setApiKey, driveAutoBackup, setDriveAutoBackup } = useSettingsStore();
+  const [clientId, setClientId] = useState(apiKeys.googleClientId ?? '');
+  const [connected, setConnected] = useState(hasLiveToken());
+  const [driveFiles, setDriveFiles] = useState<DriveBackupFile[]>([]);
+  const [driveBusy, setDriveBusy] = useState(false);
+  const [driveError, setDriveError] = useState<string | null>(null);
+  const [driveMessage, setDriveMessage] = useState<string | null>(null);
+
+  const withDrive = async (fn: (token: string) => Promise<void>, interactive = false) => {
+    setDriveBusy(true);
+    setDriveError(null);
+    setDriveMessage(null);
+    try {
+      const id = (apiKeys.googleClientId ?? '').trim();
+      if (!id) throw new Error('add your Google client ID first');
+      const token = await getAccessToken(id, { interactive });
+      await fn(token);
+      setConnected(true);
+    } catch (err) {
+      setDriveError((err as Error).message);
+    } finally {
+      setDriveBusy(false);
+    }
+  };
+
+  const connectDrive = () =>
+    withDrive(async (token) => {
+      setDriveFiles(await fetchDriveBackups(token));
+      setDriveMessage('Connected to Google Drive.');
+    }, true);
+
+  const backupNow = () =>
+    withDrive(async (token) => {
+      const file = await backupToDrive(token);
+      setDriveFiles(await fetchDriveBackups(token));
+      setDriveMessage(`Backed up to Drive as ${file.name}`);
+    });
+
+  const refreshDrive = () =>
+    withDrive(async (token) => {
+      setDriveFiles(await fetchDriveBackups(token));
+    });
+
+  const restoreFromDrive = (file: DriveBackupFile) =>
+    withDrive(async (token) => {
+      const text = await downloadBackupFile(token, file.id);
+      const backup = parseBackup(text);
+      const total = summarise(backup).reduce((s, r) => s + r.count, 0);
+      if (!confirm(`Restore ${total} records from ${file.name} into this browser?`)) return;
+      await restoreBackup(backup, { replace: false });
+      setDriveMessage(`Restored from ${file.name}. Reloading…`);
+      setTimeout(() => window.location.reload(), 1200);
+    });
+
+  const disconnectDrive = () => {
+    revokeAccess();
+    setConnected(false);
+    setDriveFiles([]);
+    setDriveAutoBackup(false);
+    setDriveMessage('Disconnected. The app can no longer reach your Drive.');
+  };
 
   // Show what is actually in this browser, so it is obvious whether a backup is worth taking.
   useEffect(() => {
@@ -168,6 +251,137 @@ export function BackupPage() {
         <p className="mt-2 text-xs text-slate-600">
           The file contains crew details and your Windy API key — treat it as private.
         </p>
+      </section>
+
+      {/* ── Google Drive ── */}
+      <section className="mb-5 rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <div className="mb-1 flex items-center gap-2">
+          <Cloud className="h-4 w-4 text-sea-400" />
+          <h3 className="font-medium text-slate-100">Google Drive</h3>
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Uploads the same backup file to a <strong>Cruising Planner Backups</strong> folder the app
+          creates in your Drive. Access is limited to files this app makes — it can never see the
+          rest of your Drive.
+        </p>
+
+        {driveError && (
+          <p className="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            {driveError}
+          </p>
+        )}
+        {driveMessage && !driveError && (
+          <p className="mb-3 rounded border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs text-green-300">
+            {driveMessage}
+          </p>
+        )}
+
+        <label className="mb-1 block text-xs font-medium text-slate-400">Google OAuth Client ID</label>
+        <div className="mb-1 flex gap-2">
+          <input
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            onBlur={() => setApiKey('googleClientId', clientId.trim())}
+            placeholder="1234567890-abc123.apps.googleusercontent.com"
+            className="flex-1 rounded bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 outline-none focus:ring-1 focus:ring-sea-500"
+          />
+        </div>
+        <p className="mb-3 text-xs text-slate-600">
+          Created once in Google Cloud Console. Not a secret — it identifies the app, it does not
+          grant access on its own.
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={connectDrive}
+            disabled={driveBusy || !clientId.trim()}
+            className="flex items-center gap-2 rounded-lg bg-sea-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sea-700 disabled:opacity-40"
+          >
+            <Cloud className="h-4 w-4" />
+            {connected ? 'Reconnect' : 'Connect Google Drive'}
+          </button>
+          <button
+            onClick={backupNow}
+            disabled={driveBusy || !clientId.trim()}
+            className="flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:opacity-40"
+          >
+            <CloudUpload className="h-4 w-4" />
+            Back Up Now
+          </button>
+          {connected && (
+            <>
+              <button
+                onClick={refreshDrive}
+                disabled={driveBusy}
+                className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </button>
+              <button
+                onClick={disconnectDrive}
+                className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-red-900/40 hover:text-red-300"
+              >
+                <LogOut className="h-4 w-4" />
+                Disconnect
+              </button>
+            </>
+          )}
+        </div>
+
+        <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={driveAutoBackup}
+            onChange={(e) => setDriveAutoBackup(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-sea-500 focus:ring-sea-500"
+          />
+          <span>
+            Back up automatically when I open the planner
+            <span className="block text-xs text-slate-500">
+              At most once an hour, and only while your Google sign-in is still valid. If it has
+              lapsed it stays quiet rather than interrupting you — come back here and press Connect.
+              Nothing can run while the planner is closed.
+            </span>
+          </span>
+        </label>
+
+        {lastBackupAt() > 0 && (
+          <p className="mt-2 text-xs text-slate-500">
+            Last Drive backup {new Date(lastBackupAt()).toLocaleString()}
+          </p>
+        )}
+
+        {driveFiles.length > 0 && (
+          <div className="mt-4 border-t border-slate-800 pt-3">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Backups in Drive ({driveFiles.length})
+            </h4>
+            <div className="space-y-1">
+              {driveFiles.slice(0, 10).map((f) => (
+                <div
+                  key={f.id}
+                  className="flex items-center justify-between gap-2 rounded border border-slate-800 bg-slate-950 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm text-slate-200">{f.name}</div>
+                    <div className="text-xs text-slate-500">
+                      {new Date(f.createdTime).toLocaleString()}
+                      {f.size ? ` · ${Math.round(Number(f.size) / 1024)} KB` : ''}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => restoreFromDrive(f)}
+                    disabled={driveBusy}
+                    className="shrink-0 rounded bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ── Import ── */}

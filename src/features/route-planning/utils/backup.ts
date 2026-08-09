@@ -96,12 +96,26 @@ function currentSettings(): unknown {
     }
   }
 
-  const { boats, activeBoatId, boatConfig, homePort, weatherThresholds, apiKeys, theme, units } =
-    useSettingsStore.getState();
+  const s = useSettingsStore.getState();
   return {
-    state: { boats, activeBoatId, boatConfig, homePort, weatherThresholds, apiKeys, theme, units },
+    state: {
+      boats: s.boats,
+      activeBoatId: s.activeBoatId,
+      boatConfig: s.boatConfig,
+      homePort: s.homePort,
+      weatherThresholds: s.weatherThresholds,
+      apiKeys: s.apiKeys,
+      theme: s.theme,
+      units: s.units,
+      driveAutoBackup: s.driveAutoBackup,
+    },
     version: 1,
   };
+}
+
+/** Filename used for both local downloads and Drive uploads. */
+export function backupFilename(exportedAt: string): string {
+  return `cruising-planner-backup-${exportedAt.slice(0, 19).replace(/[:T]/g, '-')}.json`;
 }
 
 /** Counts per table, for showing what a file holds without importing it. */
@@ -113,12 +127,11 @@ export function summarise(backup: Backup): Array<{ table: BackedUpTable; count: 
 }
 
 export function downloadBackup(backup: Backup): void {
-  const date = backup.exportedAt.slice(0, 10);
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `cruising-planner-backup-${date}.json`;
+  a.download = backupFilename(backup.exportedAt);
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

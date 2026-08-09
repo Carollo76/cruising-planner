@@ -23,6 +23,8 @@ export const DEFAULT_HOME_PORT: HomePort = {
 
 export interface ApiKeys {
   windy?: string;
+  /** OAuth client ID for Google Drive backup. Public by design — not a secret. */
+  googleClientId?: string;
 }
 
 /** A blank boat to start from when adding a second vessel to the fleet. */
@@ -56,6 +58,9 @@ interface SettingsState {
   apiKeys: ApiKeys;
   theme: 'dark' | 'light';
   units: 'imperial' | 'metric';
+  /** Back up to Google Drive automatically when the planner is opened. */
+  driveAutoBackup: boolean;
+  setDriveAutoBackup: (on: boolean) => void;
   /** Updates the active boat in place. */
   setBoatConfig: (config: BoatConfig) => void;
   /** Adds a boat to the fleet and makes it active. Returns its id. */
@@ -84,6 +89,8 @@ export const useSettingsStore = create<SettingsState>()(
       apiKeys: {},
       theme: 'dark',
       units: 'imperial',
+      driveAutoBackup: false,
+      setDriveAutoBackup: (on) => set({ driveAutoBackup: on }),
 
       setBoatConfig: (config) =>
         set((state) => ({
