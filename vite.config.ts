@@ -13,7 +13,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' rather than 'autoUpdate': autoUpdate only looks for a new build at page
+      // load, so a long-lived tab can sit on a stale bundle indefinitely with no way for
+      // the user to tell. UpdatePrompt polls for new builds and offers a visible Reload,
+      // which also avoids yanking the page out from under someone mid-form.
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'icons/*.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
