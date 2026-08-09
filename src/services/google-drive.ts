@@ -15,6 +15,9 @@ const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const FOLDER_NAME = 'Cruising Planner Backups';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
+/** Remembering the id lets the user move or rename the folder without breaking backups. */
+const FOLDER_ID_KEY = 'cruisingPlanner.driveFolderId';
+
 /* ── Minimal typings for the Google Identity Services global ── */
 interface TokenResponse {
   access_token?: string;
@@ -200,6 +203,23 @@ async function driveFetch(token: string, url: string, init?: RequestInit): Promi
  * collide with an unrelated folder of the same name elsewhere in the user's Drive.
  */
 export async function ensureBackupFolder(token: string): Promise<string> {
+  // Prefer the remembered id: Drive tracks folders by id, so this keeps working after the
+  // user moves the folder somewhere else in their Drive *or renames it*. Falling back to
+  // a name lookup alone would silently create a second folder after a rename.
+  const remembered = localStorage.getItem(FOLDER_ID_KEY);
+  if (remembered) {
+    try {
+      const resp = await driveFetch(
+        token,
+        `https://www.googleapis.com/drive/v3/files/${remembered}?fields=id,trashed`
+      );
+      const folder = (await resp.json()) as { id?: string; trashed?: boolean };
+      if (folder.id && !folder.trashed) return folder.id;
+    } catch {
+      // Deleted, or no longer reachable — fall through and find or make one.
+    }
+  }
+
   const query = encodeURIComponent(
     `name='${FOLDER_NAME}' and mimeType='${FOLDER_MIME}' and trashed=false`
   );
@@ -208,7 +228,10 @@ export async function ensureBackupFolder(token: string): Promise<string> {
     `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)&pageSize=1`
   );
   const list = (await found.json()) as { files?: Array<{ id: string }> };
-  if (list.files?.length) return list.files[0].id;
+  if (list.files?.length) {
+    localStorage.setItem(FOLDER_ID_KEY, list.files[0].id);
+    return list.files[0].id;
+  }
 
   const created = await driveFetch(token, 'https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
@@ -216,6 +239,7 @@ export async function ensureBackupFolder(token: string): Promise<string> {
     body: JSON.stringify({ name: FOLDER_NAME, mimeType: FOLDER_MIME }),
   });
   const folder = (await created.json()) as { id: string };
+  localStorage.setItem(FOLDER_ID_KEY, folder.id);
   return folder.id;
 }
 

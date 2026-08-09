@@ -267,7 +267,8 @@ export function BackupPage() {
         <p className="mb-3 text-xs text-slate-500">
           Uploads the same backup file to a <strong>Cruising Planner Backups</strong> folder the app
           creates in your Drive. Access is limited to files this app makes — it can never see the
-          rest of your Drive.
+          rest of your Drive. You can move or rename that folder anywhere in Drive; backups will
+          keep going to it.
         </p>
 
         {driveError && (
