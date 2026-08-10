@@ -96,8 +96,11 @@ export interface BailoutPoint {
   closestWaypointIndex: number;
 }
 
-/** Rate a single numeric value against low/med/high thresholds. Returns go/caution/no-go. */
-function rateValue(value: number, go: number, caution: number, _noGo: number): SafetyRating {
+/**
+ * Rate a value against go/caution thresholds. Anything at or above the caution threshold
+ * is no-go, so the third threshold the callers used to pass was never read.
+ */
+function rateValue(value: number, go: number, caution: number): SafetyRating {
   if (value < go) return 'go';
   if (value < caution) return 'caution';
   return 'no-go';
@@ -171,17 +174,17 @@ function assessHour({
 
   const windRating: SafetyRating =
     point.windSpeedKnots !== undefined
-      ? rateValue(point.windSpeedKnots, thresholds.wind.go, thresholds.wind.caution, thresholds.wind.noGo)
+      ? rateValue(point.windSpeedKnots, thresholds.wind.go, thresholds.wind.caution)
       : 'go';
 
   const gustRating: SafetyRating =
     point.gustKnots !== undefined
-      ? rateValue(point.gustKnots, thresholds.gusts.go, thresholds.gusts.caution, thresholds.gusts.noGo)
+      ? rateValue(point.gustKnots, thresholds.gusts.go, thresholds.gusts.caution)
       : 'go';
 
   const waveRating: SafetyRating =
     point.waveHeightFt !== undefined
-      ? rateValue(point.waveHeightFt, thresholds.waves.go, thresholds.waves.caution, thresholds.waves.noGo)
+      ? rateValue(point.waveHeightFt, thresholds.waves.go, thresholds.waves.caution)
       : 'go';
 
   // Tidal current rating — only matters in/near critical passages
@@ -396,29 +399,11 @@ export async function assessRoute({
     const point = findClosestHourly(merged, ts);
     if (!point) continue;
 
-    // Find nearest critical currents station and whether the boat is actively in its passage (within 2 NM)
-    let nearestCurrent: CurrentDataPoint | null = null;
-    let nearestStationName: string | undefined;
-    let inCriticalPassage = false;
-    let nearestStationDist = Infinity;
-    // Distance is measured over the ground covered during this hour, not from the single
-    // sampled point. At 6 kn the hourly samples are 6 NM apart, so a 2 NM test against an
-    // instant misses the boat passing straight through a gate between two ticks — which
-    // is how Peak Current could read 0.0 while a critical passage reported 1.4 kt.
-    const nextPosition = positionAtHour(route, h + 1).position;
-    for (const station of relevantStations) {
-      const stationPos = { lat: station.lat, lng: station.lng };
-      const d = closestApproachToSegment(stationPos, position, nextPosition).distanceNm;
-      if (d < nearestStationDist) {
-        nearestStationDist = d;
-        const pred = currentPredictions.get(station.id);
-        if (pred) {
-          nearestCurrent = findCurrentAtTime(pred, ts);
-          nearestStationName = station.name;
-          inCriticalPassage = !!station.critical && d <= 2;
-        }
-      }
-    }
+    const {
+      current: nearestCurrent,
+      stationName: nearestStationName,
+      inCriticalPassage,
+    } = currentForHour(route, relevantStations, currentPredictions, h, ts);
 
     const { windRating, gustRating, waveRating, currentRating, overallRating, warnings } = assessHour({
       point,
@@ -608,6 +593,47 @@ export interface WeatherWindow {
   hoursOfConcern: number;
 }
 
+/**
+ * Current at the boat's position for one hour of a passage.
+ *
+ * Extracted because the detailed assessment and the departure-window scan were computing
+ * this differently — the scan did not compute it at all, so a window could be rated GO
+ * while assessing that same departure returned CAUTION. Two verdicts for one departure is
+ * the contradictory-results failure this app is explicitly built to avoid.
+ */
+function currentForHour(
+  route: Route,
+  stations: Array<CurrentStation & { distanceFromRouteNM: number }>,
+  predictions: Map<string, CurrentPrediction>,
+  hour: number,
+  timestamp: number
+): { current: CurrentDataPoint | null; stationName?: string; inCriticalPassage: boolean } {
+  const { position } = positionAtHour(route, hour);
+  const nextPosition = positionAtHour(route, hour + 1).position;
+
+  let current: CurrentDataPoint | null = null;
+  let stationName: string | undefined;
+  let inCriticalPassage = false;
+  let nearest = Infinity;
+
+  for (const station of stations) {
+    const stationPos = { lat: station.lat, lng: station.lng };
+    // Measured over the ground covered this hour: at 6 kn the hourly samples are 6 NM
+    // apart, so testing a 2 NM radius against a single instant misses the boat passing
+    // straight through a gate between two ticks.
+    const d = closestApproachToSegment(stationPos, position, nextPosition).distanceNm;
+    if (d >= nearest) continue;
+    nearest = d;
+    const pred = predictions.get(station.id);
+    if (!pred) continue;
+    current = findCurrentAtTime(pred, timestamp);
+    stationName = station.name;
+    inCriticalPassage = !!station.critical && d <= 2;
+  }
+
+  return { current, stationName, inCriticalPassage };
+}
+
 export async function findBestWeatherWindow(
   route: Route,
   thresholds: WeatherThresholds,
@@ -648,6 +674,29 @@ export async function findBestWeatherWindow(
   const midpoint = samplePoints[Math.floor(samplePoints.length / 2)];
   const waveForecast = await fetchWindyWaves(midpoint, windyApiKey).catch(() => null);
 
+  // Currents across the whole candidate span, so a window is rated on the same inputs as
+  // the detailed assessment of the same departure.
+  const waypointPositions = route.waypoints.map((w) => w.position);
+  const relevantStations = findRelevantCurrentStations(waypointPositions, 5);
+  const spanEnd = new Date(
+    (candidates[candidates.length - 1]?.getTime() ?? Date.now()) +
+      (Math.ceil(route.totalEstimatedTimeHours) + 2) * 60 * 60 * 1000
+  );
+  const currentPredictions = new Map<string, CurrentPrediction>();
+  await Promise.all(
+    relevantStations.map(async (station) => {
+      try {
+        currentPredictions.set(
+          station.id,
+          await fetchCurrentPredictions(station, now, spanEnd)
+        );
+      } catch (err) {
+        // Non-fatal, but the window will then be rated without current — same as before.
+        console.warn(`Failed to fetch currents for ${station.name}:`, err);
+      }
+    })
+  );
+
   const windows: WeatherWindow[] = candidates.map((departure) => {
     const totalHours = Math.ceil(route.totalEstimatedTimeHours);
     let maxWind = 0;
@@ -673,7 +722,20 @@ export async function findBestWeatherWindow(
       const point = findClosestHourly(merged, ts);
       if (!point) continue;
 
-      const { overallRating } = assessHour({ point, thresholds });
+      const { current, stationName, inCriticalPassage } = currentForHour(
+        route,
+        relevantStations,
+        currentPredictions,
+        h,
+        ts
+      );
+      const { overallRating } = assessHour({
+        point,
+        thresholds,
+        current,
+        currentStationName: stationName,
+        inCriticalPassage,
+      });
       if (point.windSpeedKnots) maxWind = Math.max(maxWind, point.windSpeedKnots);
       if (point.waveHeightFt) maxWave = Math.max(maxWave, point.waveHeightFt);
       if (overallRating !== 'go') hoursOfConcern++;
