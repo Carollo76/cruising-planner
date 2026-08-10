@@ -1,6 +1,7 @@
 import { formatLocalTime } from '../../../utils/time';
 import { angularDifference } from '../../../utils/route-geometry';
 import type {
+  ArrivalDeadlineConstraint,
   ConstraintVerdict,
   CurrentGateConstraint,
   DaylightConstraint,
@@ -209,6 +210,30 @@ export function evaluateSeaState(
   };
 }
 
+export function evaluateArrivalDeadline(
+  constraint: ArrivalDeadlineConstraint,
+  context: EvaluationContext
+): ConstraintVerdict {
+  if (context.at <= constraint.deadline) {
+    return {
+      status: 'ok',
+      detail: `In by ${formatLocalTime(context.at)}, ahead of the ${formatLocalTime(constraint.deadline)} deadline.`,
+    };
+  }
+  const lateMin = Math.round((context.at - constraint.deadline) / 60_000);
+  return {
+    status: 'fail',
+    detail:
+      `Arrives ${formatLocalTime(context.at)}, ${lateMin} min after the ` +
+      `${formatLocalTime(constraint.deadline)} you wanted to be in by.`,
+    remedies: [
+      'Leave earlier',
+      'Accept a later arrival for this day',
+      'Split the hop with an intermediate stop',
+    ],
+  };
+}
+
 /**
  * Dispatches to the right evaluator.
  *
@@ -228,6 +253,8 @@ export function evaluate(
       return evaluateDaylight(constraint, context);
     case 'sea-state':
       return evaluateSeaState(constraint, context);
+    case 'arrival-deadline':
+      return evaluateArrivalDeadline(constraint, context);
     case 'bridge':
       return {
         status: 'unknown',

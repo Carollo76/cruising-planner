@@ -62,6 +62,12 @@ export interface ServiceHoursConstraint {
   windows: string[];
 }
 
+/** A hop must be in by a given moment — the "latest arrival" of a day's plan. */
+export interface ArrivalDeadlineConstraint {
+  kind: 'arrival-deadline';
+  deadline: Utc;
+}
+
 /** An inlet or bar where wind against tide builds a dangerous sea. */
 export interface SeaStateConstraint {
   kind: 'sea-state';
@@ -77,7 +83,8 @@ export type PlanningConstraint =
   | DaylightConstraint
   | BridgeConstraint
   | ServiceHoursConstraint
-  | SeaStateConstraint;
+  | SeaStateConstraint
+  | ArrivalDeadlineConstraint;
 
 export type ConstraintKind = PlanningConstraint['kind'];
 
