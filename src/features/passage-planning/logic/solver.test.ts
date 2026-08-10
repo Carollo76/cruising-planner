@@ -374,9 +374,18 @@ describe('when nothing in the window works', () => {
     expect(result.remedies.join(' ')).toMatch(/earlier|later|slack|wait/i);
   });
 
-  it('still returns the candidates it tried, for the user to inspect', () => {
-    expect(result.options.length).toBeGreaterThan(0);
-    expect(result.options.every((o) => !o.feasible)).toBe(true);
+  it('offers nothing as workable', () => {
+    expect(result.options).toEqual([]);
+  });
+
+  it('still returns every candidate it tried, for the user to explore', () => {
+    expect(result.allOptions.length).toBeGreaterThan(0);
+    expect(result.allOptions.every((o) => !o.feasible)).toBe(true);
+  });
+
+  it('keeps the candidates in time order so a slider can walk them', () => {
+    const times = result.allOptions.map((o) => o.departAt);
+    expect(times).toEqual([...times].sort((a, b) => a - b));
   });
 });
 
@@ -450,5 +459,35 @@ describe('departure windows rather than adjacent samples', () => {
   it('orders windows by quality, not by clock', () => {
     const scores = result.windows.map((w) => w.best.score);
     expect(scores).toEqual([...scores].sort((a, b) => a - b));
+  });
+});
+
+describe('the slider can reach every candidate', () => {
+  const path = blockIslandPath();
+  const result = solveDeparture({
+    path,
+    earliest: localDateTimeToUtc('2026-08-17', '00:00'),
+    latest: localDateTimeToUtc('2026-08-17', '12:00'),
+    cruiseSpeedKn: 6,
+    bindings: matchGates(path).map((t) => gateBinding(t.gate)),
+    lookupCurrent: plumGutLookup(),
+    boat: BOAT,
+    stepMinutes: 10,
+  });
+
+  it('exposes more candidates than the workable subset', () => {
+    expect(result.allOptions.length).toBeGreaterThanOrEqual(result.options.length);
+  });
+
+  it('includes both workable and unworkable departures when both exist', () => {
+    const feasibleCount = result.allOptions.filter((o) => o.feasible).length;
+    expect(feasibleCount).toBe(result.options.length);
+  });
+
+  it('gives different gate arrivals for different departures', () => {
+    const gateTimes = result.allOptions
+      .map((o) => o.outcomes.find((c) => c.kind === 'current-gate')?.at)
+      .filter((t): t is number => t !== undefined);
+    expect(new Set(gateTimes).size).toBeGreaterThan(10);
   });
 });

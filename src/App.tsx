@@ -23,6 +23,7 @@ import { TripEditPage } from './features/route-planning/pages/TripEditPage';
 import { BoatConfigPage } from './features/route-planning/pages/BoatConfigPage';
 import { MorePage } from './features/route-planning/pages/MorePage';
 import { BackupPage } from './features/route-planning/pages/BackupPage';
+import { DeparturePlannerPage } from './features/passage-planning/pages/DeparturePlannerPage';
 import { WeatherDashboard } from './features/weather/pages/WeatherDashboard';
 import { TripAssessmentPage } from './features/weather/pages/TripAssessmentPage';
 import { DestinationListPage } from './features/destinations/pages/DestinationListPage';
@@ -99,6 +100,7 @@ export default function App() {
         <Route path="routes/new" element={<RoutePlannerPage mode="create" />} />
         <Route path="routes/:id" element={<RouteDetailPage />} />
         <Route path="routes/:id/edit" element={<RoutePlannerPage mode="edit" />} />
+        <Route path="routes/:id/departure" element={<DeparturePlannerPage />} />
         <Route path="trips" element={<TripListPage />} />
         <Route path="trips/new" element={<TripEditPage />} />
         <Route path="trips/:id" element={<TripDetailPage />} />

@@ -65,7 +65,17 @@ export interface DepartureWindow {
 }
 
 export interface SolveResult {
+  /** Feasible departures, best first. */
   options: DepartureOption[];
+  /**
+   * Every candidate tried, in time order, feasible or not.
+   *
+   * The departure slider works from this: ranking only the workable options makes most
+   * of the slider's travel snap to the same answer, and hides the far more useful fact
+   * that leaving at 09:00 puts you at the gate on a foul tide. Exploring means being
+   * able to land on the bad choices and see why they are bad.
+   */
+  allOptions: DepartureOption[];
   /** Best feasible option, or null when every candidate fails. */
   best: DepartureOption | null;
   /** Genuinely distinct alternatives, best first. */
@@ -225,11 +235,13 @@ export function solveDeparture(options: SolveOptions): SolveResult {
     candidates.push({ ...base, ...scoreOption(base) });
   }
 
+  const byTime = [...candidates].sort((a, b) => a.departAt - b.departAt);
   const feasible = candidates.filter((c) => c.feasible).sort((a, b) => a.score - b.score);
 
   if (feasible.length > 0) {
     return {
       options: feasible,
+      allOptions: byTime,
       best: feasible[0],
       windows: groupIntoWindows(feasible, stepMinutes),
       infeasibleReason: null,
@@ -258,7 +270,8 @@ export function solveDeparture(options: SolveOptions): SolveResult {
         [...byLabel.entries()].map(([label, detail]) => `${label}: ${detail}`).join(' ');
 
   return {
-    options: candidates.sort((a, b) => a.departAt - b.departAt),
+    options: [],
+    allOptions: byTime,
     best: null,
     windows: [],
     infeasibleReason: reason,

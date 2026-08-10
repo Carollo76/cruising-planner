@@ -14,6 +14,7 @@ import {
   Gauge,
   Copy,
   FileText,
+  Waves,
 } from 'lucide-react';
 import { NauticalMap } from '../../../components/map/NauticalMap';
 import { db } from '../../../db/database';
@@ -117,6 +118,21 @@ export function RouteDetailPage() {
             Edit
           </Link>
         </div>
+
+        {/* Departure timing — the gate-aware answer to "when should I leave" */}
+        <Link
+          to={`/planner/routes/${route.id}/departure`}
+          className="mt-4 flex items-center gap-3 rounded-lg border border-sea-600/40 bg-sea-600/10 p-3 transition-colors hover:border-sea-500 hover:bg-sea-600/20"
+        >
+          <Waves className="h-5 w-5 shrink-0 text-sea-400" />
+          <span className="flex-1">
+            <span className="block text-sm font-semibold text-slate-100">Departure Timing</span>
+            <span className="block text-xs text-slate-400">
+              Tidal gates, current-aware ETAs, and the best time to leave
+            </span>
+          </span>
+          <span className="text-sea-400">&rarr;</span>
+        </Link>
 
         {/* Stats grid */}
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
