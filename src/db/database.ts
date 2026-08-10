@@ -11,6 +11,7 @@ import type { BlogPost } from '../types/blog';
 import type { WindyCacheEntry } from '../services/windy-weather';
 import type { CurrentPredictionRecord } from '../types/currents';
 import type { Itinerary } from '../features/passage-planning/model/itinerary';
+import type { TideHeightRecord } from '../services/noaaTides';
 
 export class CruisingPlannerDB extends Dexie {
   trips!: Table<Trip>;
@@ -31,6 +32,7 @@ export class CruisingPlannerDB extends Dexie {
   windyCache!: Table<WindyCacheEntry>;
   currentPredictions!: Table<CurrentPredictionRecord>;
   itineraries!: Table<Itinerary>;
+  tideHeights!: Table<TideHeightRecord>;
 
   constructor() {
     super('CruisingPlannerDB');
@@ -65,6 +67,11 @@ export class CruisingPlannerDB extends Dexie {
     // Multi-day cruises: an ordered chain of day hops between overnight stops.
     this.version(5).stores({
       itineraries: 'id, name, startDate, updatedAt',
+    });
+    // Predicted water level per station per day. Distinct from tideCache, which the old
+    // tide client uses and which stores a whole multi-day blob keyed by station alone.
+    this.version(6).stores({
+      tideHeights: 'key, stationId, dateKey, fetchedAt',
     });
   }
 }

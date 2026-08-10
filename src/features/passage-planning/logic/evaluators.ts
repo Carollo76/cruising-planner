@@ -2,6 +2,8 @@ import { formatLocalTime } from '../../../utils/time';
 import { angularDifference } from '../../../utils/route-geometry';
 import type {
   ArrivalDeadlineConstraint,
+  BridgeConstraint,
+  ServiceHoursConstraint,
   ConstraintVerdict,
   CurrentGateConstraint,
   DaylightConstraint,
@@ -235,6 +237,115 @@ export function evaluateArrivalDeadline(
 }
 
 /**
+ * Parses a `HH:MM-HH:MM` window and says whether a local time falls inside it.
+ * A window whose end is before its start runs through midnight.
+ */
+export function withinWindow(localHHMM: string, window: string): boolean {
+  const match = /^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/.exec(window.trim());
+  if (!match) return false;
+
+  const minutes = (h: string, m: string) => Number(h) * 60 + Number(m);
+  const [, sh, sm, eh, em] = match;
+  const start = minutes(sh, sm);
+  const end = minutes(eh, em);
+  const [nowH, nowM] = localHHMM.split(':');
+  const now = minutes(nowH, nowM);
+
+  return start <= end ? now >= start && now <= end : now >= start || now <= end;
+}
+
+export function evaluateBridge(
+  constraint: BridgeConstraint,
+  context: EvaluationContext
+): ConstraintVerdict {
+  const when = formatLocalTime(context.at);
+
+  // Air draft first: a bridge the boat fits under never needs to open.
+  if (constraint.closedClearanceFt !== null) {
+    if (context.boat.airDraftFt === null) {
+      return {
+        status: 'unknown',
+        detail:
+          `This bridge has ${constraint.closedClearanceFt} ft clearance closed, but your air ` +
+          `draft is not recorded — set it in Boat Config to check whether you fit under.`,
+      };
+    }
+    // Two feet of slop for tide and rigging; charted clearance is at mean high water.
+    if (context.boat.airDraftFt + 2 <= constraint.closedClearanceFt) {
+      return {
+        status: 'ok',
+        detail:
+          `${constraint.closedClearanceFt} ft clearance against your ` +
+          `${context.boat.airDraftFt} ft air draft — no opening needed.`,
+      };
+    }
+  }
+
+  if (constraint.openingWindows.length === 0) {
+    return {
+      status: 'unknown',
+      detail: `No opening schedule recorded for this bridge — confirm before you rely on ${when}.`,
+    };
+  }
+
+  const open = constraint.openingWindows.some((w) => withinWindow(when, w));
+  if (open) {
+    const notice = constraint.noticeMinutes
+      ? ` Call ${constraint.noticeMinutes} min ahead.`
+      : '';
+    return { status: 'ok', detail: `Opens at ${when} (${constraint.openingWindows.join(', ')}).${notice}` };
+  }
+
+  return {
+    status: 'fail',
+    detail: `Closed at ${when} — it opens ${constraint.openingWindows.join(', ')}.`,
+    remedies: [
+      'Shift departure so you reach the bridge inside an opening window',
+      'Wait at anchor for the next opening',
+      'Take a route that avoids the bridge',
+    ],
+  };
+}
+
+const SERVICE_LABELS: Record<ServiceHoursConstraint['service'], string> = {
+  launch: 'Launch service',
+  fuel: 'Fuel dock',
+  harbourmaster: 'Harbourmaster',
+  lock: 'Lock',
+};
+
+export function evaluateServiceHours(
+  constraint: ServiceHoursConstraint,
+  context: EvaluationContext
+): ConstraintVerdict {
+  const when = formatLocalTime(context.at);
+  const label = SERVICE_LABELS[constraint.service];
+
+  if (constraint.windows.length === 0) {
+    return { status: 'unknown', detail: `${label} hours not recorded — confirm with the marina.` };
+  }
+
+  if (constraint.windows.some((w) => withinWindow(when, w))) {
+    return { status: 'ok', detail: `${label} open at ${when} (${constraint.windows.join(', ')}).` };
+  }
+
+  // A lock you cannot pass stops the passage; a fuel dock you miss is an inconvenience.
+  if (constraint.service === 'lock') {
+    return {
+      status: 'fail',
+      detail: `Lock closed at ${when} — it operates ${constraint.windows.join(', ')}.`,
+      remedies: ['Arrive inside the operating window', 'Wait for the next opening'],
+    };
+  }
+
+  return {
+    status: 'caution',
+    detail: `${label} closed at ${when} (open ${constraint.windows.join(', ')}).`,
+    penalty: constraint.service === 'launch' ? 50 : 20,
+  };
+}
+
+/**
  * Dispatches to the right evaluator.
  *
  * The switch is exhaustive over the union; TypeScript fails the build if a variant is
@@ -256,14 +367,8 @@ export function evaluate(
     case 'arrival-deadline':
       return evaluateArrivalDeadline(constraint, context);
     case 'bridge':
-      return {
-        status: 'unknown',
-        detail: 'Bridge schedules are not yet evaluated — check the opening times yourself.',
-      };
+      return evaluateBridge(constraint, context);
     case 'service-hours':
-      return {
-        status: 'unknown',
-        detail: 'Service hours are not yet evaluated — confirm with the marina.',
-      };
+      return evaluateServiceHours(constraint, context);
   }
 }

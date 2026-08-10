@@ -491,3 +491,76 @@ describe('the slider can reach every candidate', () => {
     expect(new Set(gateTimes).size).toBeGreaterThan(10);
   });
 });
+
+describe('bridge and service-hour evaluators', () => {
+  const at = localDateTimeToUtc('2026-08-17', '14:00');
+  const night = localDateTimeToUtc('2026-08-17', '23:30');
+
+  it('lets a boat that fits under pass without an opening', () => {
+    const verdict = evaluate(
+      { kind: 'bridge', closedClearanceFt: 65, openingWindows: [], noticeMinutes: null },
+      { at, courseDeg: 90, boat: { ...BOAT, airDraftFt: 55 } }
+    );
+    expect(verdict.status).toBe('ok');
+    expect(verdict.detail).toContain('no opening needed');
+  });
+
+  it('says so when air draft is unrecorded rather than assuming it fits', () => {
+    const verdict = evaluate(
+      { kind: 'bridge', closedClearanceFt: 25, openingWindows: [], noticeMinutes: null },
+      { at, courseDeg: 90, boat: BOAT }
+    );
+    expect(verdict.status).toBe('unknown');
+    expect(verdict.detail).toContain('air draft is not recorded');
+  });
+
+  it('passes inside an opening window', () => {
+    const verdict = evaluate(
+      { kind: 'bridge', closedClearanceFt: 25, openingWindows: ['06:00-21:00'], noticeMinutes: 30 },
+      { at, courseDeg: 90, boat: { ...BOAT, airDraftFt: 55 } }
+    );
+    expect(verdict.status).toBe('ok');
+    expect(verdict.detail).toContain('Call 30 min ahead');
+  });
+
+  it('fails outside the opening window, with a way out', () => {
+    const verdict = evaluate(
+      { kind: 'bridge', closedClearanceFt: 25, openingWindows: ['06:00-21:00'], noticeMinutes: null },
+      { at: night, courseDeg: 90, boat: { ...BOAT, airDraftFt: 55 } }
+    );
+    expect(verdict.status).toBe('fail');
+    if (verdict.status === 'fail') expect(verdict.remedies.length).toBeGreaterThan(0);
+  });
+
+  it('handles a window that runs through midnight', () => {
+    const verdict = evaluate(
+      { kind: 'bridge', closedClearanceFt: 25, openingWindows: ['22:00-05:00'], noticeMinutes: null },
+      { at: night, courseDeg: 90, boat: { ...BOAT, airDraftFt: 55 } }
+    );
+    expect(verdict.status).toBe('ok');
+  });
+
+  it('treats a missed launch as an inconvenience, not a blocker', () => {
+    const verdict = evaluate(
+      { kind: 'service-hours', service: 'launch', windows: ['08:00-18:00'] },
+      { at: night, courseDeg: 90, boat: BOAT }
+    );
+    expect(verdict.status).toBe('caution');
+  });
+
+  it('treats a closed lock as a blocker', () => {
+    const verdict = evaluate(
+      { kind: 'service-hours', service: 'lock', windows: ['08:00-18:00'] },
+      { at: night, courseDeg: 90, boat: BOAT }
+    );
+    expect(verdict.status).toBe('fail');
+  });
+
+  it('says hours are unrecorded rather than assuming open', () => {
+    const verdict = evaluate(
+      { kind: 'service-hours', service: 'fuel', windows: [] },
+      { at, courseDeg: 90, boat: BOAT }
+    );
+    expect(verdict.status).toBe('unknown');
+  });
+});
