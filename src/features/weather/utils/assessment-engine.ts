@@ -17,7 +17,7 @@ import {
   type CurrentDataPoint,
 } from '../../../services/noaa-currents';
 import { distanceNM, interpolatePosition } from '../../../utils/navigation-math';
-import { closestApproachToRoute } from '../../../utils/route-geometry';
+import { closestApproachToRoute, closestApproachToSegment } from '../../../utils/route-geometry';
 
 export type SafetyRating = 'go' | 'caution' | 'no-go';
 
@@ -401,8 +401,14 @@ export async function assessRoute({
     let nearestStationName: string | undefined;
     let inCriticalPassage = false;
     let nearestStationDist = Infinity;
+    // Distance is measured over the ground covered during this hour, not from the single
+    // sampled point. At 6 kn the hourly samples are 6 NM apart, so a 2 NM test against an
+    // instant misses the boat passing straight through a gate between two ticks — which
+    // is how Peak Current could read 0.0 while a critical passage reported 1.4 kt.
+    const nextPosition = positionAtHour(route, h + 1).position;
     for (const station of relevantStations) {
-      const d = distanceNM(position, { lat: station.lat, lng: station.lng });
+      const stationPos = { lat: station.lat, lng: station.lng };
+      const d = closestApproachToSegment(stationPos, position, nextPosition).distanceNm;
       if (d < nearestStationDist) {
         nearestStationDist = d;
         const pred = currentPredictions.get(station.id);
@@ -562,7 +568,13 @@ export async function assessRoute({
       maxWindKnots: maxWind,
       maxGustKnots: maxGust,
       maxWaveFt: maxWave,
-      maxCurrentKnots: maxCurrent,
+      // Never lower than what a critical passage actually reports: the hourly scan can
+      // still under-sample a narrow gate, and a headline that contradicts the passage
+      // below it is worse than no headline.
+      maxCurrentKnots: Math.max(
+        maxCurrent,
+        ...currentTransits.map((t) => t.currentAtArrival?.absSpeedKnots ?? 0)
+      ),
       hoursOfConcern,
       caution: Array.from(cautions),
       noGo: Array.from(noGos),

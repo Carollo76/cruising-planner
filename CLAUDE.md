@@ -179,10 +179,15 @@ The core safety feature. For a given route + departure time:
 
 Defined in `src/services/noaa-currents.ts`. Stations marked `critical: true` generate warnings:
 
-- **Hell Gate** (`NYH1924`, bins 1/6/9) — up to 5 kt
-- **The Race** (`LIS1001`, bins 1/7/13, flood 292° / ebb 108°) — 3+ kt
-- **Plum Gut** (`LIS1012`, bins 1/10/21, flood 305° / ebb 124°) — 3+ kt, standing waves on ebb
-- **Throgs Neck Bridge** (`LIS1038`, bins 1/8/15)
+- **Hell Gate** (`NYH1924`, bin **9** @ 6 ft) — up to 5 kt
+- **The Race** (`LIS1001`, bin **13** @ 6 ft) — 3+ kt
+- **Plum Gut** (`LIS1012`, bin **21** @ 25 ft) — 3+ kt, standing waves on ebb
+- **Throgs Neck Bridge** (`LIS1038`, bin **15** @ 14 ft)
+
+> **NOAA numbers current bins bottom-up: bin 1 is the DEEPEST reading, not the surface.**
+> At Plum Gut bin 1 is 158 ft down and peaks at 1.6 kn on the ebb, while bin 21 at 25 ft
+> peaks at 2.9 kn. Selecting a bin by number understates the current a keel actually meets,
+> in the flattering direction. Choose by `depthFt` — `defaultBin()` does this.
 
 > The IDs above were corrected in Aug 2026. `noaa-currents.ts` had `ACT4531`/`ACT4576`
 > for The Race and Plum Gut, which are not the current-prediction stations for those

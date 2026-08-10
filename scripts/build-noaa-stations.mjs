@@ -29,7 +29,9 @@ const byId = new Map();
 for (const s of stations) {
   const existing = byId.get(s.id);
   if (existing) {
-    if (s.currbin != null && !existing.bins.includes(s.currbin)) existing.bins.push(s.currbin);
+    if (s.currbin != null && !existing.bins.some((b) => b.bin === s.currbin)) {
+      existing.bins.push({ bin: s.currbin, depthFt: s.depth ?? null });
+    }
     continue;
   }
   byId.set(s.id, {
@@ -37,14 +39,17 @@ for (const s of stations) {
     name: s.name,
     lat: Number(s.lat.toFixed(4)),
     lng: Number(s.lng.toFixed(4)),
-    bins: s.currbin != null ? [s.currbin] : [],
+    // Depth per bin, because bin numbers run bottom-up: bin 1 is the DEEPEST reading at
+    // a station, not the surface. Choosing by number rather than depth had every gate
+    // reporting the water 150 ft down instead of the water the keel is in.
+    bins: s.currbin != null ? [{ bin: s.currbin, depthFt: s.depth ?? null }] : [],
     // 'H' = harmonic (full predictions), 'S' = subordinate (offsets from a reference)
     type: s.type ?? null,
   });
 }
 
 const out = [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
-for (const s of out) s.bins.sort((a, b) => a - b);
+for (const s of out) s.bins.sort((a, b) => (a.depthFt ?? 1e9) - (b.depthFt ?? 1e9));
 
 const json = JSON.stringify(
   { generatedAt: new Date().toISOString(), source: CURRENTS_URL, stations: out },

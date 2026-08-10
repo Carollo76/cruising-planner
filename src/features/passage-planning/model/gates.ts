@@ -45,7 +45,8 @@ export const TIDAL_GATES: TidalGate[] = [
     name: 'The Race',
     position: { lat: 41.22818, lng: -72.06252 },
     stationId: 'LIS1001',
-    bin: 1,
+    // Shallowest bin NOAA publishes here (6 ft) — the water the keel is in.
+    bin: 13,
     matchRadiusNm: 2,
     hardFoulSpeedKn: 2.5,
     cautionSpeedKn: 1.0,
@@ -60,7 +61,8 @@ export const TIDAL_GATES: TidalGate[] = [
     name: 'Plum Gut',
     position: { lat: 41.15917, lng: -72.2075 },
     stationId: 'LIS1012',
-    bin: 1,
+    // Shallowest bin NOAA publishes here (25 ft) — the water the keel is in.
+    bin: 21,
     matchRadiusNm: 1.5,
     hardFoulSpeedKn: 2.5,
     cautionSpeedKn: 1.0,
@@ -76,7 +78,8 @@ export const TIDAL_GATES: TidalGate[] = [
     name: 'Hell Gate',
     position: { lat: 40.7783, lng: -73.9383 },
     stationId: 'NYH1924',
-    bin: 1,
+    // Shallowest bin NOAA publishes here (6 ft) — the water the keel is in.
+    bin: 9,
     matchRadiusNm: 1,
     hardFoulSpeedKn: 3.0,
     cautionSpeedKn: 1.5,
@@ -90,7 +93,8 @@ export const TIDAL_GATES: TidalGate[] = [
     name: 'Throgs Neck',
     position: { lat: 40.80105, lng: -73.7921 },
     stationId: 'LIS1038',
-    bin: 1,
+    // Shallowest bin NOAA publishes here (14 ft) — the water the keel is in.
+    bin: 15,
     matchRadiusNm: 1,
     hardFoulSpeedKn: 3.0,
     cautionSpeedKn: 1.5,

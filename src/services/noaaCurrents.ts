@@ -22,13 +22,20 @@ const DATA_GETTER = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
 
 export type CurrentInterval = 'MAX_SLACK' | '6';
 
+/** One depth layer a station publishes predictions for. */
+export interface CurrentBin {
+  bin: number;
+  /** Feet below the surface. Null when NOAA does not publish one. */
+  depthFt: number | null;
+}
+
 /** A station from the bundled catalogue. */
 export interface CurrentStationInfo {
   id: string;
   name: string;
   lat: number;
   lng: number;
-  bins: number[];
+  bins: CurrentBin[];
   /** 'H' harmonic (independent predictions), 'S' subordinate (offsets from a reference). */
   type: string | null;
 }
@@ -74,14 +81,27 @@ export async function findStationById(id: string): Promise<CurrentStationInfo | 
 }
 
 /**
- * Picks the depth bin to use for a station.
+ * Picks the depth bin whose water the boat actually sails in — the shallowest.
  *
- * Bin 1 is the surface bin at every station in the catalogue. A sailboat's keel sits in
- * the upper few metres, so the surface bin is the honest default; mid-column bins report
- * different speeds and would flatter or exaggerate the transit.
+ * NOAA numbers bins from the bottom up, so bin 1 is the *deepest* reading: 158 ft at Plum
+ * Gut, 45 ft at The Race. Selecting by bin number therefore reported the water a hundred
+ * feet under the keel. It is not a rounding difference — at Plum Gut the 25 ft bin peaks
+ * at 2.9 kn on the ebb against 1.6 kn at 158 ft, so the old choice understated the worst
+ * gate on the route by well over a knot, in the flattering direction.
  */
 export function defaultBin(station: CurrentStationInfo): number {
-  return station.bins.length > 0 ? Math.min(...station.bins) : 1;
+  if (station.bins.length === 0) return 1;
+  const withDepth = station.bins.filter((b) => b.depthFt !== null);
+  if (withDepth.length === 0) {
+    // No depths published: the highest bin number is the shallowest by NOAA's convention.
+    return Math.max(...station.bins.map((b) => b.bin));
+  }
+  return withDepth.reduce((a, b) => (b.depthFt! < a.depthFt! ? b : a)).bin;
+}
+
+/** Depth of a bin in feet, when known. */
+export function binDepthFt(station: CurrentStationInfo, bin: number): number | null {
+  return station.bins.find((b) => b.bin === bin)?.depthFt ?? null;
 }
 
 /* ── Fetching ── */

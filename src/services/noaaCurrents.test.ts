@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { parsePredictionBody, NoaaCurrentsError, defaultBin } from './noaaCurrents';
+import { parsePredictionBody, NoaaCurrentsError, defaultBin, binDepthFt } from './noaaCurrents';
 import { currentCacheKey, isStale, STALE_AFTER_MS } from '../types/currents';
 import { formatLocalTime, localDateKey } from '../utils/time';
 
@@ -176,11 +176,44 @@ describe('cache keys and staleness', () => {
 });
 
 describe('bin selection', () => {
-  it('picks the surface bin, which is where the keel is', () => {
-    expect(defaultBin({ id: 'LIS1001', name: '', lat: 0, lng: 0, bins: [1, 7, 13], type: 'H' })).toBe(1);
+  // NOAA numbers bins bottom-up: at The Race bin 1 is 45 ft down and bin 13 is 6 ft down.
+  // Picking by number reported the water under the keel rather than the water it sails in.
+  const race = {
+    id: 'LIS1001',
+    name: 'The Race',
+    lat: 0,
+    lng: 0,
+    type: 'H',
+    bins: [
+      { bin: 13, depthFt: 6 },
+      { bin: 7, depthFt: 25 },
+      { bin: 1, depthFt: 45 },
+    ],
+  };
+
+  it('picks the shallowest bin, not the lowest-numbered one', () => {
+    expect(defaultBin(race)).toBe(13);
+    expect(defaultBin(race)).not.toBe(1);
+  });
+
+  it('reports the depth it chose', () => {
+    expect(binDepthFt(race, 13)).toBe(6);
+    expect(binDepthFt(race, 1)).toBe(45);
+  });
+
+  it('falls back to the highest bin number when no depths are published', () => {
+    expect(
+      defaultBin({
+        ...race,
+        bins: [
+          { bin: 1, depthFt: null },
+          { bin: 9, depthFt: null },
+        ],
+      })
+    ).toBe(9);
   });
 
   it('falls back to bin 1 when a station reports none', () => {
-    expect(defaultBin({ id: 'X', name: '', lat: 0, lng: 0, bins: [], type: null })).toBe(1);
+    expect(defaultBin({ ...race, bins: [] })).toBe(1);
   });
 });

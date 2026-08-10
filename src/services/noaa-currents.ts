@@ -28,7 +28,7 @@ export interface CurrentStation {
   name: string;
   lat: number;
   lng: number;
-  /** NOAA depth bin. Bin 1 is the surface, which is where a sailboat's keel is. */
+  /** NOAA depth bin. Numbered bottom-up, so the highest number is the shallowest water. */
   bin: number;
   /** Passages where current materially affects transit safety, not just timing. */
   critical?: boolean;
@@ -47,7 +47,7 @@ export const LI_SOUND_CURRENT_STATIONS: CurrentStation[] = [
     name: 'Hell Gate',
     lat: 40.7783,
     lng: -73.9383,
-    bin: 1,
+    bin: 9,
     critical: true,
     description:
       'Critical passage between the East River and Long Island Sound. Up to 5 kt — transit near slack or with a fair tide.',
@@ -57,7 +57,7 @@ export const LI_SOUND_CURRENT_STATIONS: CurrentStation[] = [
     name: 'Throgs Neck Bridge',
     lat: 40.80105,
     lng: -73.7921,
-    bin: 1,
+    bin: 15,
     description: 'Western Long Island Sound entrance. Moderate currents.',
   },
   {
@@ -65,7 +65,7 @@ export const LI_SOUND_CURRENT_STATIONS: CurrentStation[] = [
     name: 'The Race',
     lat: 41.22818,
     lng: -72.06252,
-    bin: 1,
+    bin: 13,
     critical: true,
     description:
       'Critical passage between Long Island Sound and Block Island Sound. Over 3 kt — time the transit with the tide.',
@@ -75,7 +75,7 @@ export const LI_SOUND_CURRENT_STATIONS: CurrentStation[] = [
     name: 'Plum Gut',
     lat: 41.15917,
     lng: -72.2075,
-    bin: 1,
+    bin: 21,
     critical: true,
     description:
       'Critical narrow passage at the east end of the Sound. Over 3 kt, with standing waves on an ebb against easterly wind.',

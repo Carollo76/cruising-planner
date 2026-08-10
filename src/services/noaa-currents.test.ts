@@ -130,3 +130,25 @@ describe('reading a prediction series', () => {
     expect(findNextSlackWater(prediction, base + 8_000_000)).toBeNull();
   });
 });
+
+describe('bins point at the water the keel is in', () => {
+  // NOAA numbers bins bottom-up, so bin 1 is the deepest reading — 158 ft at Plum Gut,
+  // 45 ft at The Race. Every gate had been reading its deepest bin, which understated
+  // the current the boat actually meets, in the flattering direction.
+  const expected: Record<string, number> = {
+    'The Race': 13,
+    'Plum Gut': 21,
+    'Hell Gate': 9,
+    'Throgs Neck Bridge': 15,
+  };
+
+  it('uses the shallowest published bin at every station', () => {
+    for (const station of LI_SOUND_CURRENT_STATIONS) {
+      expect(station.bin).toBe(expected[station.name]);
+    }
+  });
+
+  it('no station is left on bin 1, which is the deepest', () => {
+    expect(LI_SOUND_CURRENT_STATIONS.every((s) => s.bin !== 1)).toBe(true);
+  });
+});
