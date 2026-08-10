@@ -166,6 +166,9 @@ interface AssessHourOptions {
   inCriticalPassage?: boolean;
 }
 
+/** Exported under a distinct name so the rating rules can be tested directly. */
+export const assessHourForTest = (options: AssessHourOptions) => assessHour(options);
+
 function assessHour({
   point,
   thresholds,
@@ -179,23 +182,42 @@ function assessHour({
   currentRating: SafetyRating;
   overallRating: SafetyRating;
   warnings: string[];
+  /** Inputs the forecast did not supply for this hour. */
+  missingInputs: string[];
 } {
   const warnings: string[] = [];
+
+  /**
+   * Absent data is not benign data.
+   *
+   * These three used to fall back to 'go' when the forecast omitted a value, which is the
+   * same mistake as treating missing waves as a flat sea — the repo's own rule forbids it
+   * for waves, and the reasoning applies equally to wind and gusts. An hour with a missing
+   * input can no longer be rated 'go'; it is capped at 'caution' and the gap is named.
+   */
+  const missingInputs: string[] = [];
 
   const windRating: SafetyRating =
     point.windSpeedKnots !== undefined
       ? rateValue(point.windSpeedKnots, thresholds.wind.go, thresholds.wind.caution)
-      : 'go';
+      : (missingInputs.push('wind'), 'caution');
 
   const gustRating: SafetyRating =
     point.gustKnots !== undefined
       ? rateValue(point.gustKnots, thresholds.gusts.go, thresholds.gusts.caution)
-      : 'go';
+      : (missingInputs.push('gusts'), 'caution');
 
   const waveRating: SafetyRating =
     point.waveHeightFt !== undefined
       ? rateValue(point.waveHeightFt, thresholds.waves.go, thresholds.waves.caution)
-      : 'go';
+      : (missingInputs.push('wave height'), 'caution');
+
+  if (missingInputs.length > 0) {
+    warnings.push(
+      `No ${missingInputs.join(' or ')} data for this hour — rated caution because it could ` +
+        `not be checked, not because conditions are known to be marginal.`
+    );
+  }
 
   // Tidal current rating — only matters in/near critical passages
   let currentRating: SafetyRating = 'go';
@@ -248,6 +270,7 @@ function assessHour({
     currentRating,
     overallRating: worstRating(windRating, gustRating, waveRating, currentRating),
     warnings,
+    missingInputs,
   };
 }
 
