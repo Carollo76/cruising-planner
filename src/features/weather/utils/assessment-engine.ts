@@ -17,6 +17,7 @@ import {
   type CurrentDataPoint,
 } from '../../../services/noaa-currents';
 import { distanceNM, interpolatePosition } from '../../../utils/navigation-math';
+import { closestApproachToRoute } from '../../../utils/route-geometry';
 
 export type SafetyRating = 'go' | 'caution' | 'no-go';
 
@@ -463,21 +464,17 @@ export async function assessRoute({
     const pred = currentPredictions.get(station.id);
     if (!pred) continue;
 
-    // Estimate when boat arrives at this station: find closest waypoint then compute elapsed hours
-    let closestIdx = 0;
-    let minDist = Infinity;
-    for (let i = 0; i < route.waypoints.length; i++) {
-      const d = distanceNM(route.waypoints[i].position, { lat: station.lat, lng: station.lng });
-      if (d < minDist) {
-        minDist = d;
-        closestIdx = i;
-      }
-    }
-
-    let hoursToStation = 0;
-    for (let i = 0; i < closestIdx; i++) {
-      hoursToStation += route.legs[i]?.estimatedTimeHours ?? 0;
-    }
+    // Arrival is estimated from distance along the track to the point of closest
+    // approach, not from the nearest waypoint. Waypoints can be far from where the boat
+    // actually passes a station — on the Block Island route The Race is 7.2 NM from the
+    // nearest waypoint while the track goes within 3.35 NM — which put the transit
+    // several hours out.
+    const approach = closestApproachToRoute(
+      { lat: station.lat, lng: station.lng },
+      waypointPositions
+    );
+    const speedKn = route.expectedSpeedKnots > 0 ? route.expectedSpeedKnots : 6;
+    const hoursToStation = approach ? approach.routeDistanceNm / speedKn : 0;
     const arrivalTs = departureTime.getTime() + hoursToStation * 60 * 60 * 1000;
 
     const currentAtArrival = findCurrentAtTime(pred, arrivalTs);

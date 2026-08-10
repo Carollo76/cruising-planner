@@ -1,87 +1,94 @@
 import type { Position } from '../types/navigation';
-import { db } from '../db/database';
-import { distanceNM } from '../utils/navigation-math';
+import { closestApproachToRoute } from '../utils/route-geometry';
+import { localDateKey, type Utc } from '../utils/time';
+import { getDayPredictions } from './noaaCurrents';
 
-/** NOAA Tidal Currents API client.
- *  Docs: https://api.tidesandcurrents.noaa.gov/api/prod/
- *  Returns time-series of current speed and direction at a station. */
-
-const NOAA_ENDPOINT = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
+/**
+ * Tidal currents for the Go/No-Go assessment engine.
+ *
+ * This is now a thin adapter over `noaaCurrents.ts`, kept because the assessment engine
+ * consumes this shape. Rewriting it fixed three defects that had been feeding the safety
+ * feature quietly wrong answers:
+ *
+ * 1. The station IDs were wrong. The Race was ACT4531 and Plum Gut ACT4576, neither of
+ *    which is the current-prediction station for that passage — so the engine's warnings
+ *    about the two most dangerous gates on the Sound were based on the wrong water.
+ * 2. Current *direction* was parsed from NOAA's `Bin` field, which is the depth-bin
+ *    index. Direction was therefore the number 1, 7 or 10 rather than a heading.
+ * 3. Stations were matched by distance to waypoints, so a station beside a long leg was
+ *    missed entirely — on the real Block Island route The Race is 7.2 NM from the nearest
+ *    waypoint while the track passes 3.35 NM off it.
+ *
+ * Predictions are also now cached in the `currentPredictions` table instead of being
+ * written into `tideCache`'s `height` field, which was for water levels.
+ */
 
 export interface CurrentStation {
   id: string;
   name: string;
   lat: number;
   lng: number;
-  /** Critical = passages where currents significantly affect transit time/safety */
+  /** NOAA depth bin. Bin 1 is the surface, which is where a sailboat's keel is. */
+  bin: number;
+  /** Passages where current materially affects transit safety, not just timing. */
   critical?: boolean;
-  /** Short description of what makes this passage important */
   description?: string;
 }
 
-/** Hand-picked critical currents stations for Long Island Sound cruising.
- *  Station IDs verified against tidesandcurrents.noaa.gov.
- *  "critical" stations generate warnings in the assessment engine. */
+/**
+ * Current-prediction stations relevant to Long Island Sound cruising.
+ *
+ * IDs and bins verified against the NOAA metadata API — see
+ * `scripts/build-current-stations.mjs` and `src/data/current-stations.json`.
+ */
 export const LI_SOUND_CURRENT_STATIONS: CurrentStation[] = [
   {
-    id: 'ACT3876',
+    id: 'NYH1924',
     name: 'Hell Gate',
-    lat: 40.7792,
-    lng: -73.9344,
+    lat: 40.7783,
+    lng: -73.9383,
+    bin: 1,
     critical: true,
-    description: 'Critical passage between East River and Long Island Sound. Currents up to 5 kt — transit only near slack or with favorable tide.',
+    description:
+      'Critical passage between the East River and Long Island Sound. Up to 5 kt — transit near slack or with a fair tide.',
   },
   {
-    id: 'ACT3896',
-    name: 'Throgs Neck',
-    lat: 40.8067,
-    lng: -73.7933,
+    id: 'LIS1038',
+    name: 'Throgs Neck Bridge',
+    lat: 40.80105,
+    lng: -73.7921,
+    bin: 1,
     description: 'Western Long Island Sound entrance. Moderate currents.',
   },
   {
-    id: 'ACT4011',
-    name: 'Execution Rocks',
-    lat: 40.8820,
-    lng: -73.7322,
-    description: 'Western LI Sound, off New Rochelle.',
-  },
-  {
-    id: 'ACT4531',
+    id: 'LIS1001',
     name: 'The Race',
-    lat: 41.2333,
-    lng: -72.0533,
+    lat: 41.22818,
+    lng: -72.06252,
+    bin: 1,
     critical: true,
-    description: 'Critical passage between LI Sound and Block Island Sound. Currents up to 4+ kt — time your transit with the tide.',
+    description:
+      'Critical passage between Long Island Sound and Block Island Sound. Over 3 kt — time the transit with the tide.',
   },
   {
-    id: 'ACT4576',
+    id: 'LIS1012',
     name: 'Plum Gut',
-    lat: 41.1700,
-    lng: -72.2100,
+    lat: 41.15917,
+    lng: -72.2075,
+    bin: 1,
     critical: true,
-    description: 'Critical narrow passage at east end of LI Sound. Strong currents up to 4+ kt, standing waves on ebb against wind.',
-  },
-  {
-    id: 'ACT4541',
-    name: 'Fishers Island Sound',
-    lat: 41.3017,
-    lng: -71.9750,
-    description: 'Between Fishers Island and CT mainland.',
-  },
-  {
-    id: 'ACT3826',
-    name: 'Stepping Stones Light',
-    lat: 40.8264,
-    lng: -73.7753,
-    description: 'Western LI Sound near City Island.',
+    description:
+      'Critical narrow passage at the east end of the Sound. Over 3 kt, with standing waves on an ebb against easterly wind.',
   },
 ];
 
 export interface CurrentDataPoint {
-  timestamp: number; // Unix ms (UTC)
-  speedKnots: number; // negative = flood (incoming/westbound typically), positive = ebb (outgoing/eastbound)
+  /** Unix ms, UTC. */
+  timestamp: number;
+  /** Signed along the station's major axis: positive flood, negative ebb. */
+  speedKnots: number;
+  /** Direction the water sets toward, degrees true. */
   directionDeg: number;
-  /** Absolute speed regardless of direction */
   absSpeedKnots: number;
   type: 'flood' | 'ebb' | 'slack';
 }
@@ -93,178 +100,111 @@ export interface CurrentPrediction {
   data: CurrentDataPoint[];
 }
 
-function yyyymmdd(date: Date): string {
-  return (
-    date.getFullYear().toString() +
-    (date.getMonth() + 1).toString().padStart(2, '0') +
-    date.getDate().toString().padStart(2, '0')
-  );
+/** Local days covered by a range, inclusive. */
+function daysBetween(start: Utc, end: Utc): Utc[] {
+  const day = 86_400_000;
+  const seen = new Set<string>();
+  const days: Utc[] = [];
+  for (let t = start; t <= end + day; t += day) {
+    const key = localDateKey(t);
+    if (!seen.has(key)) {
+      seen.add(key);
+      days.push(t);
+    }
+  }
+  return days;
 }
 
-/** Fetch tidal current predictions for a station across a date range.
- *  Uses 6-minute interval predictions. Free, no API key required. */
+/**
+ * Predictions for a station across a date range.
+ *
+ * Backed by the cached six-minute series, so a repeat assessment on the same day does no
+ * network work and an assessment at anchor works entirely from cache.
+ */
 export async function fetchCurrentPredictions(
   station: CurrentStation,
   startDate: Date,
   endDate: Date
 ): Promise<CurrentPrediction> {
-  const params = new URLSearchParams({
-    product: 'currents_predictions',
-    station: station.id,
-    begin_date: yyyymmdd(startDate),
-    end_date: yyyymmdd(endDate),
-    units: 'english',
-    time_zone: 'gmt',
-    format: 'json',
-    interval: '30', // 30-minute intervals (lighter payload)
-  });
+  const data: CurrentDataPoint[] = [];
+  let fetchedAt = Date.now();
 
-  const url = `${NOAA_ENDPOINT}?${params.toString()}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`NOAA currents fetch failed for ${station.name}: ${res.status}`);
+  for (const day of daysBetween(startDate.getTime(), endDate.getTime())) {
+    const record = await getDayPredictions(station.id, station.bin, '6', day);
+    fetchedAt = Math.min(fetchedAt, record.fetchedAt);
+
+    for (const event of record.events) {
+      // Direction comes from the station's reported flood/ebb axis, which arrives with
+      // the predictions — not from the bin index, as this module used to do.
+      const directionDeg =
+        event.velocityKn >= 0 ? (record.meanFloodDirDeg ?? 0) : (record.meanEbbDirDeg ?? 0);
+      data.push({
+        timestamp: event.at,
+        speedKnots: event.velocityKn,
+        directionDeg,
+        absSpeedKnots: Math.abs(event.velocityKn),
+        type: event.kind,
+      });
+    }
   }
 
-  const json = await res.json();
-  if (json.error) {
-    throw new Error(`NOAA currents error for ${station.name}: ${json.error.message}`);
-  }
-
-  const predictions: any[] = json.current_predictions?.cp ?? [];
-  const data: CurrentDataPoint[] = predictions.map((p) => {
-    // velocity_major is signed speed along the axis (+ flood, - ebb) OR
-    // some stations report "Velocity_Major". Handle both.
-    const velocity = parseFloat(p.Velocity_Major ?? p.velocity_major ?? p.s ?? '0');
-    const direction = parseFloat(p.Bin ?? p.direction ?? p.d ?? '0');
-    const absSpeed = Math.abs(velocity);
-    const typeStr: string = (p.Type ?? p.type ?? '').toLowerCase();
-    let type: 'flood' | 'ebb' | 'slack';
-    if (absSpeed < 0.1) type = 'slack';
-    else if (typeStr.startsWith('f')) type = 'flood';
-    else if (typeStr.startsWith('e')) type = 'ebb';
-    else type = velocity >= 0 ? 'flood' : 'ebb';
-
-    return {
-      timestamp: new Date(p.Time + 'Z').getTime(),
-      speedKnots: velocity,
-      directionDeg: direction,
-      absSpeedKnots: absSpeed,
-      type,
-    };
-  });
-
-  const prediction: CurrentPrediction = {
+  return {
     stationId: station.id,
     stationName: station.name,
-    fetchedAt: Date.now(),
+    fetchedAt,
     data: data.sort((a, b) => a.timestamp - b.timestamp),
   };
-
-  // Cache in IndexedDB so repeat assessments on the same day don't re-fetch
-  await db.tideCache.put({
-    stationId: station.id,
-    stationName: station.name,
-    predictions: data.map((d) => ({
-      timestamp: new Date(d.timestamp).toISOString(),
-      height: d.speedKnots, // reuse tide cache schema — stored as signed knots here
-      type: d.type === 'flood' ? 'H' : d.type === 'ebb' ? 'L' : undefined,
-    })),
-    fetchedAt: Date.now(),
-  }).catch(() => {
-    // cache write is best-effort
-  });
-
-  return prediction;
 }
 
-/** Find stations within maxDistanceNM of any point along a route.
- *  Returns stations sorted by closest approach distance. */
+/**
+ * Stations whose water the route actually passes through.
+ *
+ * Measured to the track rather than to waypoints. The old waypoint-only version missed
+ * The Race entirely on a route that passes 3.35 NM from it, because the leg carrying the
+ * boat past it is 27 NM long with no waypoint nearby.
+ */
 export function findRelevantCurrentStations(
   waypoints: Position[],
   maxDistanceNM = 5
 ): Array<CurrentStation & { distanceFromRouteNM: number }> {
+  if (waypoints.length < 2) return [];
+
   const results: Array<CurrentStation & { distanceFromRouteNM: number }> = [];
-
   for (const station of LI_SOUND_CURRENT_STATIONS) {
-    const stationPos: Position = { lat: station.lat, lng: station.lng };
-    let minDist = Infinity;
-    for (const wp of waypoints) {
-      const d = distanceNM(wp, stationPos);
-      if (d < minDist) minDist = d;
-    }
-    if (minDist <= maxDistanceNM) {
-      results.push({ ...station, distanceFromRouteNM: minDist });
-    }
+    const approach = closestApproachToRoute({ lat: station.lat, lng: station.lng }, waypoints);
+    if (!approach || approach.distanceNm > maxDistanceNM) continue;
+    results.push({ ...station, distanceFromRouteNM: approach.distanceNm });
   }
-
   return results.sort((a, b) => a.distanceFromRouteNM - b.distanceFromRouteNM);
 }
 
-/** Find the closest prediction data point to a target timestamp */
+/** Closest prediction to an instant, or null when the series does not reach it. */
 export function findCurrentAtTime(
   prediction: CurrentPrediction,
   targetTimestampMs: number
 ): CurrentDataPoint | null {
   if (prediction.data.length === 0) return null;
+
   let best = prediction.data[0];
   let minDiff = Math.abs(best.timestamp - targetTimestampMs);
-  for (const p of prediction.data) {
-    const diff = Math.abs(p.timestamp - targetTimestampMs);
+  for (const point of prediction.data) {
+    const diff = Math.abs(point.timestamp - targetTimestampMs);
     if (diff < minDiff) {
       minDiff = diff;
-      best = p;
+      best = point;
     }
   }
-  return best;
+  // Beyond an hour either side there is no usable prediction; saying nothing beats
+  // reporting the current from a different tide.
+  return minDiff <= 3_600_000 ? best : null;
 }
 
-/** Find next slack water after a given time */
+/** First slack water after an instant. */
 export function findNextSlackWater(
   prediction: CurrentPrediction,
   afterTimestampMs: number
 ): CurrentDataPoint | null {
-  const upcoming = prediction.data.filter(
-    (d) => d.timestamp >= afterTimestampMs && d.type === 'slack'
+  return (
+    prediction.data.find((d) => d.timestamp >= afterTimestampMs && d.type === 'slack') ?? null
   );
-  return upcoming[0] ?? null;
-}
-
-/** Find the best window for transiting this station given a target arrival time.
- *  Returns favorable windows: slack water ± 2hr, or strong current in your direction. */
-export interface CurrentTransitWindow {
-  stationId: string;
-  stationName: string;
-  windowStart: number;
-  windowEnd: number;
-  peakSpeedKnots: number;
-  type: 'slack' | 'flood' | 'ebb';
-  recommendation: string;
-}
-
-export function findFavorableTransitWindows(
-  prediction: CurrentPrediction,
-  fromTimestampMs: number,
-  hoursAhead = 12
-): CurrentTransitWindow[] {
-  const endMs = fromTimestampMs + hoursAhead * 60 * 60 * 1000;
-  const inRange = prediction.data.filter(
-    (d) => d.timestamp >= fromTimestampMs && d.timestamp <= endMs
-  );
-
-  const windows: CurrentTransitWindow[] = [];
-  const slacks = inRange.filter((d) => d.type === 'slack');
-
-  for (const slack of slacks) {
-    windows.push({
-      stationId: prediction.stationId,
-      stationName: prediction.stationName,
-      windowStart: slack.timestamp - 60 * 60 * 1000, // 1hr before slack
-      windowEnd: slack.timestamp + 60 * 60 * 1000, // 1hr after slack
-      peakSpeedKnots: 0.5,
-      type: 'slack',
-      recommendation: `Transit near slack water at ${new Date(slack.timestamp).toLocaleString()}`,
-    });
-  }
-
-  return windows;
 }
