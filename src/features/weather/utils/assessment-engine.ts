@@ -82,6 +82,16 @@ export interface RouteAssessment {
   };
   bailoutPoints: BailoutPoint[];
   currentTransits: CurrentTransitPlan[];
+  /**
+   * Critical passages close to the route but outside the matching threshold.
+   *
+   * Without this, an absent passage is ambiguous: the skipper cannot tell "The Race is
+   * nowhere near this route" from "we failed to fetch it". Naming the near misses with
+   * their distance makes the silence legible.
+   */
+  nearbyCriticalPassages: Array<{ name: string; distanceNm: number }>;
+  /** Stations whose predictions could not be fetched, so their passage was not assessed. */
+  currentDataFailures: string[];
   recommendation: string;
 }
 
@@ -352,17 +362,26 @@ export async function assessRoute({
   // Find any NOAA currents stations within 5 NM of the route and fetch their predictions
   const waypointPositions = route.waypoints.map((w) => w.position);
   const relevantStations = findRelevantCurrentStations(waypointPositions, 5);
+  // Critical passages just outside the threshold, so their absence below can be explained
+  // rather than left as an unexplained blank.
+  const matchedIds = new Set(relevantStations.map((s) => s.id));
+  const nearbyCriticalPassages = findRelevantCurrentStations(waypointPositions, 15)
+    .filter((s) => s.critical && !matchedIds.has(s.id))
+    .map((s) => ({ name: s.name, distanceNm: s.distanceFromRouteNM }));
   const totalHours = Math.ceil(route.totalEstimatedTimeHours);
   const endTime = new Date(departureTime.getTime() + (totalHours + 2) * 60 * 60 * 1000);
 
   const currentPredictions = new Map<string, CurrentPrediction>();
+  const currentDataFailures: string[] = [];
   await Promise.all(
     relevantStations.map(async (station) => {
       try {
         const pred = await fetchCurrentPredictions(station, departureTime, endTime);
         currentPredictions.set(station.id, pred);
       } catch (err) {
-        // Non-fatal: currents are supplementary
+        // Surfaced in the result, not just logged. A passage silently dropped because its
+        // fetch failed looks identical to a passage that is not on the route.
+        currentDataFailures.push(`${station.name}: ${(err as Error).message}`);
         console.warn(`Failed to fetch currents for ${station.name}:`, err);
       }
     })
@@ -566,6 +585,8 @@ export async function assessRoute({
     },
     bailoutPoints,
     currentTransits,
+    nearbyCriticalPassages,
+    currentDataFailures,
     recommendation,
   };
 }

@@ -480,6 +480,24 @@ export function TripAssessmentPage() {
               </div>
             </section>
 
+            {/* Currents that could not be fetched — never a silent omission */}
+            {assessment.currentDataFailures.length > 0 && (
+              <section className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+                <h3 className="mb-1 text-sm font-semibold text-amber-300">
+                  Current data unavailable
+                </h3>
+                <p className="mb-1 text-xs text-amber-200">
+                  These passages were <strong>not assessed</strong> — their tide timing is missing
+                  from this result, not absent from your route.
+                </p>
+                <ul className="list-inside list-disc text-xs text-amber-200">
+                  {assessment.currentDataFailures.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
             {/* Critical Passages — tide timing */}
             {assessment.currentTransits.length > 0 && (
               <section>
@@ -608,6 +626,23 @@ export function TripAssessmentPage() {
                 })}
               </div>
             </section>
+
+            {/* Critical passages close by but outside the matching threshold. Without this,
+                an absent passage is ambiguous — "not near your route" reads exactly like
+                "we failed to fetch it". */}
+            {assessment.nearbyCriticalPassages.length > 0 && (
+              <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+                <h4 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Near the route, not transited
+                </h4>
+                {assessment.nearbyCriticalPassages.map((passage) => (
+                  <p key={passage.name} className="text-xs text-slate-400">
+                    {passage.name} passes {passage.distanceNm.toFixed(1)} NM off your route — its
+                    current is not applied to this assessment.
+                  </p>
+                ))}
+              </section>
+            )}
 
             {/* Bailout Points — grouped by voyage hour */}
             {assessment.bailoutPoints.length > 0 && (() => {
