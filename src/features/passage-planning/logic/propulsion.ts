@@ -32,6 +32,12 @@ export interface LegPropulsionInput {
   motoring: { cruiseSpeedKn: number; fuelGph: number };
   /** Days between the forecast being issued and this leg. Degrades confidence. */
   forecastLeadDays: number;
+  /**
+   * Why there is no wind for this leg, when there isn't. "No wind forecast" is true but
+   * useless; "the forecast only reaches 16 Aug" tells the skipper to come back nearer
+   * the day rather than wonder what is broken.
+   */
+  windGapReason?: string;
 }
 
 export interface LegPropulsionAdvice {
@@ -107,7 +113,9 @@ export function adviseLeg(input: LegPropulsionInput): LegPropulsionAdvice {
     return {
       ...base,
       recommendation: 'unknown',
-      reason: 'No wind forecast for this leg, so there is nothing to base sail advice on.',
+      reason:
+        input.windGapReason ??
+        'No wind forecast for this leg, so there is nothing to base sail advice on.',
       trueWindAngle: null,
       trueWindSpeed: null,
       polarBoatSpeed: null,

@@ -6,6 +6,7 @@ import { useSettingsStore } from '../../../stores/settings-store';
 import type { Route, Position } from '../../../types/navigation';
 import { formatLocalTime, localDateKey, localDateTimeToUtc } from '../../../utils/time';
 import { daylightFor } from '../../../utils/solar';
+import { distanceNM } from '../../../utils/navigation-math';
 import { isStale } from '../../../types/currents';
 import { matchGates, nearbyGates, favourablePhase, type GateTransit } from '../logic/matching';
 import { gateBinding } from '../model/gates';
@@ -18,6 +19,11 @@ import {
 import { solveDeparture, describeOption, type SolveResult, type DepartureOption } from '../logic/solver';
 import type { ConstraintBinding } from '../model/constraints';
 import { GateTimeline } from '../components/GateTimeline';
+import { PropulsionStrip } from '../components/PropulsionStrip';
+import { loadPolarForDraft } from '../logic/polar-source';
+import { adviseLeg, summarise, type LegPropulsionAdvice } from '../logic/propulsion';
+import { fetchWindForecast, windAt, leadDays, type WindForecast } from '../../../services/openMeteoWind';
+import type { Polar } from '../logic/polar';
 
 /**
  * Departure planning for one route.
@@ -38,6 +44,8 @@ export function DeparturePlannerPage() {
   const [error, setError] = useState<string | null>(null);
   const [gateData, setGateData] = useState<GateCurrentData[]>([]);
   const [fetchFailures, setFetchFailures] = useState<string[]>([]);
+  const [polar, setPolar] = useState<Polar | null>(null);
+  const [wind, setWind] = useState<WindForecast | null>(null);
 
   const [dateKey, setDateKey] = useState(searchParams.get('date') ?? localDateKey(Date.now()));
   const [earliestTime, setEarliestTime] = useState('04:00');
@@ -62,6 +70,12 @@ export function DeparturePlannerPage() {
 
   const earliest = useMemo(() => localDateTimeToUtc(dateKey, earliestTime), [dateKey, earliestTime]);
   const latest = useMemo(() => localDateTimeToUtc(dateKey, latestTime), [dateKey, latestTime]);
+
+  // The polar is chosen by draft; a mismatched certificate is not a small error, so
+  // loadPolarForDraft returns null rather than serving the wrong one.
+  useEffect(() => {
+    loadPolarForDraft(boatConfig.draft).then(setPolar).catch(() => setPolar(null));
+  }, [boatConfig.draft]);
 
   useEffect(() => {
     if (!id) return;
@@ -94,12 +108,28 @@ export function DeparturePlannerPage() {
       const { data, failures } = await prefetchGateCurrents(transits, earliest, latest);
       setGateData(data);
       setFetchFailures(failures);
+      if (path.length >= 2) {
+        try {
+          // Ask for enough days to cover the planning date. Open-Meteo tops out at 16;
+          // beyond that there simply is no forecast, which the advice will say plainly.
+          const daysNeeded = Math.ceil((latest - Date.now()) / 86_400_000) + 2;
+          setWind(
+            await fetchWindForecast(
+              path[Math.floor(path.length / 2)],
+              Math.min(16, Math.max(2, daysNeeded))
+            )
+          );
+        } catch {
+          // Wind is optional; its absence is reported by the propulsion advice itself.
+          setWind(null);
+        }
+      }
     } catch (err) {
       setError(`Could not fetch predictions: ${(err as Error).message}`);
     } finally {
       setFetching(false);
     }
-  }, [transits, earliest, latest]);
+  }, [transits, earliest, latest, path]);
 
   const bindings: ConstraintBinding[] = useMemo(() => {
     const gates = transits.map((t) => gateBinding(t.gate));
@@ -152,6 +182,81 @@ export function DeparturePlannerPage() {
     }
     return best;
   }, [solution, overrideMinutes, earliest]);
+
+  /** Set when a wind forecast exists but does not reach the day being planned. */
+  const windGap = useMemo(() => {
+    if (!wind || wind.points.length === 0) return null;
+    const horizon = wind.points[wind.points.length - 1].at;
+    if (latest <= horizon) return null;
+    return (
+      `The wind forecast only reaches ${localDateKey(horizon)}, so this date is beyond it. ` +
+      `Sail advice will fill in nearer the day.`
+    );
+  }, [wind, latest]);
+
+  /** The route's own legs, which is how a skipper thinks — not the 2 NM solver steps. */
+  const legDistances = useMemo(
+    () => path.slice(1).map((p, i) => distanceNM(path[i], p)),
+    [path]
+  );
+
+  /**
+   * Advice per leg for the departure currently on screen.
+   *
+   * A leg's required speed comes only from a gate still ahead of it: once the boat is
+   * past the gate, nothing about that gate constrains how fast it sails.
+   */
+  const propulsion: LegPropulsionAdvice[] = useMemo(() => {
+    if (!shown || path.length < 2) return [];
+    const gate = shown.outcomes.find((o) => o.kind === 'current-gate');
+    const steps = shown.projection.steps;
+    if (steps.length === 0) return [];
+
+    const advice: LegPropulsionAdvice[] = [];
+    let travelled = 0;
+
+    for (let i = 0; i < legDistances.length; i++) {
+      const legNm = legDistances[i];
+      const step = steps.find((s) => s.routeDistanceNm >= travelled) ?? steps[steps.length - 1];
+      const at = step.departedAt;
+      const sample = wind ? windAt(wind, at) : null;
+
+      const gateAhead = gate && gate.routeDistanceNm > travelled;
+      const hoursToGate = gateAhead ? (gate.at - at) / 3_600_000 : 0;
+
+      advice.push(
+        adviseLeg({
+          legId: `leg-${i}`,
+          courseDeg: step.courseDeg,
+          distanceNm: legNm,
+          at,
+          wind: sample
+            ? { speedKn: sample.speedKn, directionDeg: sample.directionDeg, gustKn: sample.gustKn }
+            : null,
+          polar,
+          requiredSpeedKn:
+            gateAhead && hoursToGate > 0.05
+              ? (gate.routeDistanceNm - travelled) / hoursToGate
+              : null,
+          deadlineLabel: gateAhead ? `${gate.label} at ${formatLocalTime(gate.at)}` : null,
+          motoring: {
+            cruiseSpeedKn: boatConfig.cruisingSpeedKnots,
+            fuelGph: boatConfig.fuelConsumptionGPH,
+          },
+          forecastLeadDays: wind ? leadDays(wind, at) : 99,
+          windGapReason: windGap ?? undefined,
+        })
+      );
+
+      travelled += legNm;
+    }
+    return advice;
+  }, [shown, path, wind, polar, boatConfig, legDistances, windGap]);
+
+  const propulsionSummary = useMemo(
+    () => summarise(propulsion, new Map(propulsion.map((a, i) => [a.legId, legDistances[i] ?? 0]))),
+    [propulsion, legDistances]
+  );
 
   const windowMinutes = Math.max(10, Math.round((latest - earliest) / 60_000));
   const oldest = gateData.flatMap((g) => g.records).reduce<number | null>(
@@ -451,6 +556,16 @@ export function DeparturePlannerPage() {
             </p>
           ))}
         </section>
+      )}
+
+      {propulsion.length > 0 && (
+        <div className="mb-3">
+          <PropulsionStrip
+            advice={propulsion}
+            summary={propulsionSummary}
+            fuelCapacityGal={boatConfig.fuelCapacityGallons}
+          />
+        </div>
       )}
 
       <p className="mt-4 rounded border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs leading-relaxed text-slate-400">

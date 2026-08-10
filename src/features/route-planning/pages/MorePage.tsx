@@ -7,9 +7,11 @@ import {
   ShoppingCart,
   BookOpen,
   DatabaseBackup,
+  CalendarDays,
 } from 'lucide-react';
 
 const moreItems = [
+  { to: '/planner/itineraries', icon: CalendarDays, label: 'Cruises', description: 'Multi-day passages timed against the tide' },
   { to: '/planner/trips', icon: Compass, label: 'Trips', description: 'Plan voyages with routes, crew, and provisions' },
   { to: '/planner/boat', icon: Sailboat, label: 'Boat Config', description: 'Vessel specs and details' },
   { to: '/planner/crew', icon: Users, label: 'Crew', description: 'Manage crew roster' },

@@ -24,6 +24,8 @@ import { BoatConfigPage } from './features/route-planning/pages/BoatConfigPage';
 import { MorePage } from './features/route-planning/pages/MorePage';
 import { BackupPage } from './features/route-planning/pages/BackupPage';
 import { DeparturePlannerPage } from './features/passage-planning/pages/DeparturePlannerPage';
+import { ItineraryListPage } from './features/passage-planning/pages/ItineraryListPage';
+import { ItineraryPage } from './features/passage-planning/pages/ItineraryPage';
 import { WeatherDashboard } from './features/weather/pages/WeatherDashboard';
 import { TripAssessmentPage } from './features/weather/pages/TripAssessmentPage';
 import { DestinationListPage } from './features/destinations/pages/DestinationListPage';
@@ -50,6 +52,7 @@ import { TripSummaryPage } from './features/logbook/pages/TripSummaryPage';
 /** Planner sections that used to live at the root before everything moved under /planner. */
 const LEGACY_PLANNER_SEGMENTS = new Set([
   'routes',
+  'itineraries',
   'trips',
   'destinations',
   'safety',
@@ -101,6 +104,8 @@ export default function App() {
         <Route path="routes/:id" element={<RouteDetailPage />} />
         <Route path="routes/:id/edit" element={<RoutePlannerPage mode="edit" />} />
         <Route path="routes/:id/departure" element={<DeparturePlannerPage />} />
+        <Route path="itineraries" element={<ItineraryListPage />} />
+        <Route path="itineraries/:id" element={<ItineraryPage />} />
         <Route path="trips" element={<TripListPage />} />
         <Route path="trips/new" element={<TripEditPage />} />
         <Route path="trips/:id" element={<TripDetailPage />} />
