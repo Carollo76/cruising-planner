@@ -631,10 +631,21 @@ function buildRecommendation(
 export interface WeatherWindow {
   departureTime: number;
   rating: SafetyRating;
-  score: number; // lower is better — counts hours of concern + normalized peak wind
+  /** Lower is better. Hours of concern dominate, then foul current, then peak wind. */
+  score: number;
   maxWind: number;
   maxWave: number;
+  /** Strongest current met inside a critical passage on this window. */
+  maxCurrent: number;
   hoursOfConcern: number;
+  /**
+   * True when the wave forecast was unavailable for this scan.
+   *
+   * Without it, a window rated caution purely because waves could not be fetched looks
+   * identical to one rated caution because the sea is up — the same ambiguity that made a
+   * missing critical passage unreadable.
+   */
+  waveDataUnavailable: boolean;
 }
 
 /**
@@ -717,6 +728,7 @@ export async function findBestWeatherWindow(
   );
   const midpoint = samplePoints[Math.floor(samplePoints.length / 2)];
   const waveForecast = await fetchWindyWaves(midpoint, windyApiKey).catch(() => null);
+  const wavesMissing = waveForecast?.waveDataUnavailable ?? waveForecast === null;
 
   // Currents across the whole candidate span, so a window is rated on the same inputs as
   // the detailed assessment of the same departure.
@@ -745,6 +757,7 @@ export async function findBestWeatherWindow(
     const totalHours = Math.ceil(route.totalEstimatedTimeHours);
     let maxWind = 0;
     let maxWave = 0;
+    let maxCurrent = 0;
     let hoursOfConcern = 0;
     let overall: SafetyRating = 'go';
 
@@ -782,6 +795,7 @@ export async function findBestWeatherWindow(
       });
       if (point.windSpeedKnots) maxWind = Math.max(maxWind, point.windSpeedKnots);
       if (point.waveHeightFt) maxWave = Math.max(maxWave, point.waveHeightFt);
+      if (current && inCriticalPassage) maxCurrent = Math.max(maxCurrent, current.absSpeedKnots);
       if (overallRating !== 'go') hoursOfConcern++;
       overall = worstRating(overall, overallRating);
     }
@@ -789,10 +803,15 @@ export async function findBestWeatherWindow(
     return {
       departureTime: departure.getTime(),
       rating: overall,
-      score: hoursOfConcern * 10 + maxWind,
+      // Current is weighted above wind: 3 kt through a gate ruins a passage in a way that
+      // 3 kt of extra breeze does not. Scoring on wind alone let a window with a foul gate
+      // outrank a clean one whenever their hours-of-concern tied.
+      score: hoursOfConcern * 10 + maxCurrent * 5 + maxWind,
       maxWind,
       maxWave,
+      maxCurrent,
       hoursOfConcern,
+      waveDataUnavailable: wavesMissing,
     };
   });
 

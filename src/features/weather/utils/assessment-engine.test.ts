@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { positionAtHour, assessHourForTest } from './assessment-engine';
+import { positionAtHour, assessHourForTest, findBailoutPoints } from './assessment-engine';
 import { DEFAULT_THRESHOLDS } from '../../../constants/weather-thresholds';
 import type { Route, Waypoint } from '../../../types/navigation';
+import type { Destination } from '../../../types/destination';
 
 /**
  * The rule under test is the repo's own: missing data must never read as benign.
@@ -160,5 +161,106 @@ describe('position along the route', () => {
 
   it('clamps at the start for a negative hour', () => {
     expect(positionAtHour(r, -5).position).toEqual(r.waypoints[0].position);
+  });
+});
+
+/* ────────────────────────────── Bailout points ────────────────────────────── */
+
+function place(
+  id: string,
+  lat: number,
+  lng: number,
+  type: Destination['type']
+): Destination {
+  return {
+    id,
+    name: id,
+    type,
+    position: { lat, lng },
+    region: 'new-england',
+    amenities: {
+      fuel: false, water: false, electric: false, pumpout: false, showers: false,
+      laundry: false, wifi: false, restaurant: false, groceries: false, repairs: false,
+      dinghyDock: false, pool: false, ice: false, propane: false,
+    },
+    details: {
+      type: 'anchorage',
+      holdingQuality: 'good',
+      bottomType: 'mud',
+      typicalDepthFeet: 12,
+      protectionFrom: ['N', 'NE'],
+      exposedTo: ['S'],
+    },
+    reviews: [],
+    isUserAdded: false,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+}
+
+describe('bailout points', () => {
+  // A due-north 12 NM leg at 6 kn: two hours, 6 NM per hour.
+  const r = route();
+
+  it('finds a harbour beside the track', () => {
+    const bailouts = findBailoutPoints(r, [place('Close', 41.1, -72.45, 'anchorage')]);
+    expect(bailouts).toHaveLength(1);
+    expect(bailouts[0].distanceFromRouteNM).toBeLessThan(3);
+  });
+
+  it('ignores a harbour beyond the search radius', () => {
+    expect(findBailoutPoints(r, [place('Far', 41.1, -70.0, 'marina')], 15)).toHaveLength(0);
+  });
+
+  // DestinationType only admits marina, anchorage, mooring, yacht-club and town-dock, so
+  // the isProtected filter inside findBailoutPoints cannot reject anything. Documented
+  // here rather than removed: if a type like 'landmark' is ever added, this pins the
+  // expectation that shelter filtering has to start working.
+  it('accepts every destination type the model currently allows', () => {
+    const types = ['marina', 'anchorage', 'mooring', 'yacht-club', 'town-dock'] as const;
+    for (const type of types) {
+      expect(findBailoutPoints(r, [place(type, 41.1, -72.45, type)])).toHaveLength(1);
+    }
+  });
+
+  it('reports when along the voyage each one is closest', () => {
+    const bailouts = findBailoutPoints(r, [
+      place('Near start', 41.02, -72.5, 'marina'),
+      place('Near end', 41.18, -72.5, 'marina'),
+    ]);
+    const start = bailouts.find((b) => b.destination.id === 'Near start')!;
+    const end = bailouts.find((b) => b.destination.id === 'Near end')!;
+    expect(start.hoursIntoVoyage).toBeLessThan(end.hoursIntoVoyage);
+  });
+
+  it('orders by when they are reachable', () => {
+    const bailouts = findBailoutPoints(r, [
+      place('Near end', 41.18, -72.5, 'marina'),
+      place('Near start', 41.02, -72.5, 'marina'),
+    ]);
+    const hours = bailouts.map((b) => b.hoursIntoVoyage);
+    expect(hours).toEqual([...hours].sort((a, b) => a - b));
+  });
+
+  it('derives divert time from distance and cruising speed', () => {
+    const bailouts = findBailoutPoints(r, [place('Off', 41.1, -72.36, 'marina')]);
+    const b = bailouts[0];
+    expect(b.divertTimeHours).toBeCloseTo(b.distanceFromRouteNM / r.expectedSpeedKnots, 5);
+  });
+
+  it('returns nothing for a route with fewer than two waypoints', () => {
+    expect(findBailoutPoints({ ...r, waypoints: [r.waypoints[0]] }, [])).toEqual([]);
+  });
+
+  it('survives a route with a zero cruising speed rather than dividing by it', () => {
+    const stopped = { ...r, expectedSpeedKnots: 0 };
+    const bailouts = findBailoutPoints(stopped, [place('Close', 41.1, -72.45, 'anchorage')]);
+    expect(bailouts.every((b) => Number.isFinite(b.divertTimeHours))).toBe(true);
+  });
+
+  it('does not report the same harbour twice', () => {
+    const duplicate = place('Close', 41.1, -72.45, 'anchorage');
+    const bailouts = findBailoutPoints(r, [duplicate, { ...duplicate }]);
+    expect(bailouts).toHaveLength(1);
   });
 });

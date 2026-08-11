@@ -385,7 +385,14 @@ export function TripAssessmentPage() {
                         {format(new Date(w.departureTime), 'EEE MMM d, h:mm a')}
                       </div>
                       <div className="mt-0.5 text-xs text-slate-400">
-                        Wind max {w.maxWind.toFixed(0)} kt · Waves {w.maxWave.toFixed(1)} ft · {w.hoursOfConcern}h concern
+                        Wind max {w.maxWind.toFixed(0)} kt ·{' '}
+                        {w.waveDataUnavailable ? (
+                          <span className="text-amber-400">waves unavailable</span>
+                        ) : (
+                          `Waves ${w.maxWave.toFixed(1)} ft`
+                        )}
+                        {w.maxCurrent > 0 && ` · Current ${w.maxCurrent.toFixed(1)} kt`} ·{' '}
+                        {w.hoursOfConcern}h concern
                       </div>
                     </div>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style.bg} ${style.text}`}>
@@ -686,7 +693,9 @@ export function TripAssessmentPage() {
                     Bailout Options Along Route
                   </h3>
                   <p className="mb-3 text-xs text-slate-500">
-                    Protected harbors within 15 NM of your route — includes cross-sound options
+                    Divert times assume {' '}
+                  {assessment.cruisingSpeedKnots.toFixed(1)} kt through the water with no current
+                  allowance — a foul tide will make them longer. Protected harbors within 15 NM of your route — includes cross-sound options
                     (Connecticut coast when sailing the LI shore). Sorted by closest first in each segment.
                   </p>
                   <div className="space-y-4">
