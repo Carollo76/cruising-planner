@@ -84,6 +84,8 @@ export function DestinationEditPage() {
   const [lat, setLat] = useState(homePort.lat);
   const [lng, setLng] = useState(homePort.lng);
   const [amenities, setAmenities] = useState<Amenities>({ ...DEFAULT_AMENITIES });
+  const [controllingDepth, setControllingDepth] = useState('');
+  const [depthSource, setDepthSource] = useState('');
 
   // Marina
   const [slipCount, setSlipCount] = useState('');
@@ -123,6 +125,8 @@ export function DestinationEditPage() {
           setLat(d.position.lat);
           setLng(d.position.lng);
           setAmenities(d.amenities);
+          setControllingDepth(d.entranceControllingDepthFt?.toString() ?? '');
+          setDepthSource(d.depthSourceNote ?? '');
           setIsUserAdded(d.isUserAdded);
           setCreatedAt(d.createdAt);
 
@@ -235,6 +239,13 @@ export function DestinationEditPage() {
       phone: phone.trim() || undefined,
       website: website.trim() || undefined,
       amenities,
+      // Left undefined when blank so the depth check says "unknown" rather than reading a
+      // stray 0 as "no water".
+      entranceControllingDepthFt:
+        controllingDepth.trim() !== '' && Number.isFinite(Number(controllingDepth))
+          ? Number(controllingDepth)
+          : undefined,
+      depthSourceNote: depthSource.trim() || undefined,
       details: buildDetails(),
       reviews: existing?.reviews ?? [],
       isUserAdded: isNew ? true : isUserAdded,
@@ -390,6 +401,43 @@ export function DestinationEditPage() {
             <Locate className="h-3.5 w-3.5" />
             Use My Location
           </button>
+        </section>
+
+        {/* Entrance depth — what decides whether the boat can get in */}
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Entrance Depth
+          </h3>
+          <p className="mb-2 text-xs text-slate-500">
+            Least depth in the entrance channel at MLLW. Leave blank if you do not know it —
+            the departure planner will say the depth is unknown rather than assume there is
+            water. Take it from a chart or Coast Pilot, never an estimate.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">
+                Controlling depth (ft, MLLW)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={controllingDepth}
+                onChange={(e) => setControllingDepth(e.target.value)}
+                placeholder="e.g. 6"
+                className="w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none focus:ring-1 focus:ring-sea-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Source</label>
+              <input
+                type="text"
+                value={depthSource}
+                onChange={(e) => setDepthSource(e.target.value)}
+                placeholder="NOAA chart 12365, 2024"
+                className="w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none focus:ring-1 focus:ring-sea-500"
+              />
+            </div>
+          </div>
         </section>
 
         {/* Contact */}

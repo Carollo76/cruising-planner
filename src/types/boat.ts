@@ -7,6 +7,12 @@ export interface BoatConfig {
   loa: number;
   beam: number;
   draft: number;
+  /**
+   * Height of the highest fixed point — masthead, antenna, wind instrument — above the
+   * waterline, in feet. Optional because it must be measured, not assumed: bridge
+   * clearance checks report "unknown" without it rather than guessing a rig height.
+   */
+  airDraftFt?: number;
   displacement: number;
   engineHP: number;
   fuelCapacityGallons: number;

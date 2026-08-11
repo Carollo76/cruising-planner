@@ -172,6 +172,21 @@ export function BoatConfigPage() {
               <input type="number" step="0.1" {...register('beam', { valueAsNumber: true })} className="w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-1 focus:ring-sea-500" />
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">
+                Air Draft (ft)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="masthead above water"
+                {...register('airDraftFt', { valueAsNumber: true })}
+                className="w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none focus:ring-1 focus:ring-sea-500"
+              />
+              <p className="mt-0.5 text-xs text-slate-500">
+                Highest point above the waterline. Bridge clearance is not checked without it.
+              </p>
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium text-slate-400">Draft (ft)</label>
               <input type="number" step="0.1" {...register('draft', { valueAsNumber: true })} className="w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-1 focus:ring-sea-500" />
             </div>

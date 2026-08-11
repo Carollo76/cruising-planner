@@ -4,6 +4,13 @@ import { ArrowLeft, RefreshCw, Sunrise, TriangleAlert, Waves } from 'lucide-reac
 import { db } from '../../../db/database';
 import { useSettingsStore } from '../../../stores/settings-store';
 import type { Route, Position } from '../../../types/navigation';
+import type { Destination } from '../../../types/destination';
+import {
+  nearestTideStation,
+  getTideDay,
+  heightAt,
+  type TideHeightRecord,
+} from '../../../services/noaaTides';
 import { formatLocalTime, localDateKey, localDateTimeToUtc } from '../../../utils/time';
 import { daylightFor } from '../../../utils/solar';
 import { distanceNM } from '../../../utils/navigation-math';
@@ -14,6 +21,7 @@ import {
   buildCurrentLookup,
   loadCachedGateCurrents,
   prefetchGateCurrents,
+  daysToCover,
   type GateCurrentData,
 } from '../logic/current-source';
 import { solveDeparture, describeOption, type SolveResult, type DepartureOption } from '../logic/solver';
@@ -46,6 +54,10 @@ export function DeparturePlannerPage() {
   const [fetchFailures, setFetchFailures] = useState<string[]>([]);
   const [polar, setPolar] = useState<Polar | null>(null);
   const [wind, setWind] = useState<WindForecast | null>(null);
+  /** The saved destination the route ends at, if one is close enough to be the same place. */
+  const [arrivalPlace, setArrivalPlace] = useState<Destination | null>(null);
+  const [arrivalStationId, setArrivalStationId] = useState<string | null>(null);
+  const [arrivalTide, setArrivalTide] = useState<TideHeightRecord[]>([]);
 
   const [dateKey, setDateKey] = useState(searchParams.get('date') ?? localDateKey(Date.now()));
   const [earliestTime, setEarliestTime] = useState('04:00');
@@ -100,6 +112,38 @@ export function DeparturePlannerPage() {
     loadCachedGateCurrents(transits, earliest, latest).then(setGateData).catch(() => setGateData([]));
   }, [transits, earliest, latest]);
 
+  // Match the final waypoint to a saved place, so its charted entrance depth can be
+  // checked. Half a mile is tight enough that this cannot pick up a neighbouring harbour.
+  useEffect(() => {
+    if (path.length < 2) {
+      setArrivalPlace(null);
+      return;
+    }
+    const end = path[path.length - 1];
+    db.destinations.toArray().then((places) => {
+      let best: Destination | null = null;
+      let bestDistance = Infinity;
+      for (const place of places) {
+        const d = distanceNM(end, place.position);
+        if (d < bestDistance) {
+          bestDistance = d;
+          best = place;
+        }
+      }
+      setArrivalPlace(bestDistance <= 0.5 ? best : null);
+    });
+  }, [path]);
+
+  useEffect(() => {
+    if (!arrivalPlace) {
+      setArrivalStationId(null);
+      return;
+    }
+    nearestTideStation(arrivalPlace.position)
+      .then((found) => setArrivalStationId(found?.station.id ?? null))
+      .catch(() => setArrivalStationId(null));
+  }, [arrivalPlace]);
+
   const download = useCallback(async () => {
     if (transits.length === 0) return;
     setFetching(true);
@@ -108,6 +152,17 @@ export function DeparturePlannerPage() {
       const { data, failures } = await prefetchGateCurrents(transits, earliest, latest);
       setGateData(data);
       setFetchFailures(failures);
+      if (arrivalStationId) {
+        try {
+          const days = daysToCover(earliest, latest, 1);
+          setArrivalTide(
+            await Promise.all(days.map((day) => getTideDay(arrivalStationId, day)))
+          );
+        } catch {
+          // Depth simply stays unassessed, which the verdict reports.
+          setArrivalTide([]);
+        }
+      }
       if (path.length >= 2) {
         try {
           // Ask for enough days to cover the planning date. Open-Meteo tops out at 16;
@@ -129,13 +184,35 @@ export function DeparturePlannerPage() {
     } finally {
       setFetching(false);
     }
-  }, [transits, earliest, latest, path]);
+  }, [transits, earliest, latest, path, arrivalStationId]);
 
   const bindings: ConstraintBinding[] = useMemo(() => {
     const gates = transits.map((t) => gateBinding(t.gate));
     if (path.length < 2) return gates;
     return [
       ...gates,
+      ...(arrivalPlace
+        ? [
+            {
+              id: 'tide:arrival',
+              label: `Water at ${arrivalPlace.name}`,
+              constraint: {
+                kind: 'tide-height' as const,
+                stationId: arrivalStationId ?? '',
+                controllingDepthFt: arrivalPlace.entranceControllingDepthFt ?? null,
+                safetyMarginFt: 2,
+              },
+              appliesTo: {
+                kind: 'destination' as const,
+                destinationId: arrivalPlace.id,
+                on: 'arrival' as const,
+              },
+              source: 'seed' as const,
+              sourceNote: arrivalPlace.depthSourceNote,
+              enabled: true,
+            },
+          ]
+        : []),
       {
         id: 'daylight:arrival',
         label: 'Arrival in daylight',
@@ -160,14 +237,18 @@ export function DeparturePlannerPage() {
       lookupCurrent: lookup,
       boat: {
         draftFt: boatConfig.draft,
-        airDraftFt: null,
+        airDraftFt: boatConfig.airDraftFt ?? null,
         cruiseSpeedKn: boatConfig.cruisingSpeedKnots,
       },
       // Daylight is judged at the destination, wherever along the route the check falls.
-      contextAt: (_position, at) => ({ daylight: daylightFor(destination, at) }),
+      contextAt: (_position, at) => {
+        const day = arrivalTide.find((r) => r.dateKey === localDateKey(at));
+        const tideHeightFt = day ? (heightAt(day, at) ?? undefined) : undefined;
+        return { daylight: daylightFor(destination, at), tideHeightFt };
+      },
       stepMinutes: 10,
     });
-  }, [path, earliest, latest, boatConfig, bindings, gateData]);
+  }, [path, earliest, latest, boatConfig, bindings, gateData, arrivalTide]);
 
   /** What the slider is showing: the override if set, otherwise the solver's pick. */
   const shown: DepartureOption | null = useMemo(() => {

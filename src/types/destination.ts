@@ -15,6 +15,16 @@ export interface Destination {
   website?: string;
   amenities: Amenities;
   details: MarinaDetails | AnchorageDetails | MooringDetails;
+  /**
+   * Least depth in the entrance channel at MLLW, in feet.
+   *
+   * Undefined means unknown, and the depth check reports that rather than assuming water.
+   * Only ever populated from a chart, a Coast Pilot, or a USACE survey — never estimated,
+   * because this number decides whether the boat floats.
+   */
+  entranceControllingDepthFt?: number;
+  /** Where the depth came from, e.g. "NOAA chart 12365, 2024 edition". */
+  depthSourceNote?: string;
   reviews: Review[];
   isUserAdded: boolean;
   createdAt: number;
