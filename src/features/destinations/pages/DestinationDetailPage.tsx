@@ -204,6 +204,32 @@ export function DestinationDetailPage() {
           )}
         </div>
 
+        {/* Entrance depth — shown whether or not it is known, because "unknown" is the
+            answer the departure planner will give and the skipper should see it here too. */}
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Entrance Depth
+          </h3>
+          {d.entranceControllingDepthFt !== undefined ? (
+            <div className="rounded bg-slate-800 p-3">
+              <div className="text-lg font-semibold text-slate-100">
+                {d.entranceControllingDepthFt.toFixed(1)} ft
+                <span className="ml-1 text-xs font-normal text-slate-400">at MLLW</span>
+              </div>
+              <div className="mt-0.5 text-xs text-slate-400">
+                {d.depthSourceNote
+                  ? `Source: ${d.depthSourceNote}`
+                  : 'No source recorded — worth noting where this came from.'}
+              </div>
+            </div>
+          ) : (
+            <p className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+              Not recorded. Departure planning will report the depth here as unknown rather
+              than assume there is water. Add it from a chart or Coast Pilot via Edit.
+            </p>
+          )}
+        </section>
+
         {/* Type-specific details */}
         {d.details.type === 'marina' && (d.type === 'marina' || d.type === 'yacht-club' || d.type === 'town-dock') && (
           <section>
