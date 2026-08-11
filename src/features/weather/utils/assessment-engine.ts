@@ -16,8 +16,12 @@ import {
   type CurrentPrediction,
   type CurrentDataPoint,
 } from '../../../services/noaa-currents';
-import { distanceNM, interpolatePosition } from '../../../utils/navigation-math';
-import { closestApproachToRoute, closestApproachToSegment } from '../../../utils/route-geometry';
+import { distanceNM, interpolatePosition, bearingTrue } from '../../../utils/navigation-math';
+import {
+  closestApproachToRoute,
+  closestApproachToSegment,
+  alongTrackCurrentKn,
+} from '../../../utils/route-geometry';
 
 export type SafetyRating = 'go' | 'caution' | 'no-go';
 
@@ -101,10 +105,25 @@ export interface BailoutPoint {
   distanceFromRouteNM: number;
   /** Approximate hours into the voyage when you're closest to this bailout */
   hoursIntoVoyage: number;
-  /** How long it takes to divert from route and reach this bailout at cruising speed */
+  /** Time to reach this bailout, including current along the divert bearing when known. */
   divertTimeHours: number;
+  /** Speed over ground used for the divert. */
+  divertSpeedKn: number;
+  /** Bearing from the route to the bailout, degrees true. */
+  divertBearingDeg: number;
+  /**
+   * Along-track current on the divert, in knots: positive helps, negative hinders.
+   * Null when no prediction was available, which the UI must say rather than imply zero.
+   */
+  currentAlongDivertKn: number | null;
   closestWaypointIndex: number;
 }
+
+/** Current at a place and time, for costing a divert. */
+export type BailoutCurrentLookup = (
+  position: Position,
+  atMs: number
+) => { speedKnots: number; directionDeg: number } | null;
 
 /**
  * Rate a value against go/caution thresholds. Anything at or above the caution threshold
@@ -280,10 +299,20 @@ function assessHour({
  *  Default 15 NM radius catches cross-sound bailouts — e.g. Connecticut harbors
  *  when sailing along the Long Island north shore. A 15 NM divert at 6 kt is
  *  2.5 hours, which is a reasonable tradeoff in deteriorating conditions. */
+/**
+ * Harbours reachable from the route, with an honest time to reach them.
+ *
+ * Divert time used to be distance / cruising speed, which assumes slack water. Diverting
+ * into a foul 2.5 kt stream at 6 kn through the water is 3.5 kn over the ground — half
+ * the speed, twice the time. Understating that on an emergency decision is the same
+ * optimism that ran through the rest of this engine, so when a current lookup is supplied
+ * the divert is costed against the water it actually crosses.
+ */
 export function findBailoutPoints(
   route: Route,
   destinations: Destination[],
-  maxDistanceNM = 15
+  maxDistanceNM = 15,
+  options: { currentLookup?: BailoutCurrentLookup; departureTimeMs?: number } = {}
 ): BailoutPoint[] {
   if (route.waypoints.length < 2) return [];
 
@@ -324,11 +353,34 @@ export function findBailoutPoints(
     }
 
     if (minDist <= maxDistanceNM) {
+      const from = positionAtHour(route, closestHours).position;
+      const divertBearingDeg = bearingTrue(from, d.position);
+
+      let currentAlongDivertKn: number | null = null;
+      if (options.currentLookup && options.departureTimeMs !== undefined) {
+        const atMs = options.departureTimeMs + closestHours * 60 * 60 * 1000;
+        const sample = options.currentLookup(from, atMs);
+        if (sample) {
+          currentAlongDivertKn = alongTrackCurrentKn(
+            sample.speedKnots,
+            sample.directionDeg,
+            divertBearingDeg
+          );
+        }
+      }
+
+      // Floor the speed so an overwhelming foul stream yields a very long divert rather
+      // than a negative or infinite one.
+      const divertSpeedKn = Math.max(0.5, speed + (currentAlongDivertKn ?? 0));
+
       candidates.push({
         destination: d,
         distanceFromRouteNM: minDist,
         hoursIntoVoyage: closestHours,
-        divertTimeHours: minDist / speed,
+        divertTimeHours: minDist / divertSpeedKn,
+        divertSpeedKn,
+        divertBearingDeg,
+        currentAlongDivertKn,
         closestWaypointIndex: closestLegIdx,
       });
       seenIds.add(d.id);
@@ -567,7 +619,29 @@ export async function assessRoute({
     });
   }
 
-  const bailoutPoints = findBailoutPoints(route, destinations);
+  // Divert times are costed against the predicted current at the moment of the divert,
+  // using the station predictions already fetched for this assessment.
+  const bailoutPoints = findBailoutPoints(route, destinations, 15, {
+    departureTimeMs: departureTime.getTime(),
+    currentLookup: (position, atMs) => {
+      let nearest: CurrentDataPoint | null = null;
+      let nearestDist = Infinity;
+      for (const station of relevantStations) {
+        const d = distanceNM(position, { lat: station.lat, lng: station.lng });
+        if (d >= nearestDist) continue;
+        const pred = currentPredictions.get(station.id);
+        if (!pred) continue;
+        const sample = findCurrentAtTime(pred, atMs);
+        if (!sample) continue;
+        nearestDist = d;
+        nearest = sample;
+      }
+      // Beyond a station's influence there is no basis for a current, and guessing one
+      // would be the fabrication this codebase keeps having to remove.
+      if (!nearest || nearestDist > 6) return null;
+      return { speedKnots: nearest.absSpeedKnots, directionDeg: nearest.directionDeg };
+    },
+  });
 
   const recommendation = buildRecommendation(overallRating, {
     maxWind,

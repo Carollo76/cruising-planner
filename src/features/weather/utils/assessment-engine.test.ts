@@ -264,3 +264,62 @@ describe('bailout points', () => {
     expect(bailouts).toHaveLength(1);
   });
 });
+
+describe('divert times are costed against the current', () => {
+  const r = route();
+  const harbour = place('Refuge', 41.1, -72.36, 'marina'); // roughly due east of the track
+  const DEPART = Date.UTC(2026, 7, 17, 12, 0);
+
+  function bailoutWith(speedKnots: number, directionDeg: number) {
+    return findBailoutPoints(r, [harbour], 15, {
+      departureTimeMs: DEPART,
+      currentLookup: () => ({ speedKnots, directionDeg }),
+    })[0];
+  }
+
+  it('falls back to cruising speed when no current is known, and says so', () => {
+    const b = findBailoutPoints(r, [harbour])[0];
+    expect(b.currentAlongDivertKn).toBeNull();
+    expect(b.divertSpeedKn).toBe(r.expectedSpeedKnots);
+  });
+
+  it('a fair current shortens the divert', () => {
+    const fair = bailoutWith(2, 90); // setting the way we are going
+    const still = findBailoutPoints(r, [harbour])[0];
+    expect(fair.currentAlongDivertKn!).toBeGreaterThan(0);
+    expect(fair.divertTimeHours).toBeLessThan(still.divertTimeHours);
+  });
+
+  // The case that matters: an emergency divert into a foul stream.
+  it('a foul current lengthens the divert', () => {
+    const foul = bailoutWith(2.5, 270); // setting against us
+    const still = findBailoutPoints(r, [harbour])[0];
+    expect(foul.currentAlongDivertKn!).toBeLessThan(0);
+    expect(foul.divertTimeHours).toBeGreaterThan(still.divertTimeHours);
+  });
+
+  it('a 2.5 kt foul stream nearly doubles the time, which is the point', () => {
+    const foul = bailoutWith(2.5, 270);
+    const still = findBailoutPoints(r, [harbour])[0];
+    expect(foul.divertTimeHours / still.divertTimeHours).toBeGreaterThan(1.6);
+  });
+
+  it('a cross-setting current barely changes it', () => {
+    const across = bailoutWith(2.5, 0);
+    const still = findBailoutPoints(r, [harbour])[0];
+    expect(Math.abs(across.divertTimeHours - still.divertTimeHours)).toBeLessThan(0.05);
+  });
+
+  it('an overwhelming foul stream gives a long but finite divert, never negative', () => {
+    const overwhelming = bailoutWith(20, 270);
+    expect(Number.isFinite(overwhelming.divertTimeHours)).toBe(true);
+    expect(overwhelming.divertTimeHours).toBeGreaterThan(0);
+    expect(overwhelming.divertSpeedKn).toBeGreaterThan(0);
+  });
+
+  it('reports the bearing the divert is on', () => {
+    const b = findBailoutPoints(r, [harbour])[0];
+    expect(b.divertBearingDeg).toBeGreaterThan(45);
+    expect(b.divertBearingDeg).toBeLessThan(135);
+  });
+});

@@ -693,9 +693,10 @@ export function TripAssessmentPage() {
                     Bailout Options Along Route
                   </h3>
                   <p className="mb-3 text-xs text-slate-500">
-                    Divert times assume {' '}
-                  {assessment.cruisingSpeedKnots.toFixed(1)} kt through the water with no current
-                  allowance — a foul tide will make them longer. Protected harbors within 15 NM of your route — includes cross-sound options
+                    Divert times use the predicted current on the divert bearing where a
+                  station is in range; elsewhere they assume{' '}
+                  {assessment.cruisingSpeedKnots.toFixed(1)} kt through the water. Protected
+                  harbors within 15 NM of your route — includes cross-sound options
                     (Connecticut coast when sailing the LI shore). Sorted by closest first in each segment.
                   </p>
                   <div className="space-y-4">
@@ -745,6 +746,20 @@ export function TripAssessmentPage() {
                                       {divertMin < 60
                                         ? `${divertMin} min to divert`
                                         : `${(divertMin / 60).toFixed(1)}h to divert`}
+                                      {bp.currentAlongDivertKn !== null && (
+                                        <span
+                                          className={
+                                            bp.currentAlongDivertKn < -0.2
+                                              ? 'text-amber-400'
+                                              : 'text-slate-500'
+                                          }
+                                        >
+                                          {' '}
+                                          ({bp.divertSpeedKn.toFixed(1)} kt over ground,{' '}
+                                          {bp.currentAlongDivertKn >= 0 ? 'fair' : 'foul'}{' '}
+                                          {Math.abs(bp.currentAlongDivertKn).toFixed(1)} kt)
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                 </Link>
