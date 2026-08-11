@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { parseGPX } from '../../route-planning/utils/gpx';
 import { parsePredictionBody } from '../../../services/noaaCurrents';
 import { solveDeparture, describeOption } from './solver';
-import { projectPassage } from './propagation';
+import { projectPassage, positionAtTime, arrivalAtDistance } from './propagation';
 import { evaluateCurrentGate, evaluateTideHeight, evaluateDaylight, evaluate } from './evaluators';
 import { gateBinding, findGate } from '../model/gates';
 import { matchGates } from './matching';
@@ -562,5 +562,45 @@ describe('bridge and service-hour evaluators', () => {
       { at, courseDeg: 90, boat: BOAT }
     );
     expect(verdict.status).toBe('unknown');
+  });
+});
+
+describe('current-aware position, which the old engine lacked', () => {
+  const path = blockIslandPath();
+  const depart = localDateTimeToUtc('2026-08-17', '05:00');
+
+  it('places the boat somewhere different from the slack-water assumption', () => {
+    const still = projectPassage(path, depart, 6, () => null);
+    const tidal = projectPassage(path, depart, 6, plumGutLookup());
+
+    // Same distance covered, different time taken — so at any given clock time the two
+    // models have the boat in different places. That gap is the drift.
+    expect(tidal.totalDistanceNm).toBeCloseTo(still.totalDistanceNm, 1);
+    expect(Math.abs(tidal.elapsedHours - still.elapsedHours) * 60).toBeGreaterThan(5);
+  });
+
+  it('positionAtTime and arrivalAtDistance agree with each other', () => {
+    const projection = projectPassage(path, depart, 6, plumGutLookup());
+    const midway = projection.totalDistanceNm / 2;
+    const arrival = arrivalAtDistance(projection, midway)!;
+    const where = positionAtTime(projection, arrival.at)!;
+    expect(Math.abs(where.routeDistanceNm - midway)).toBeLessThan(2.5);
+  });
+
+  it('clamps before departure and after arrival', () => {
+    const projection = projectPassage(path, depart, 6, plumGutLookup());
+    expect(positionAtTime(projection, depart - 3_600_000)!.routeDistanceNm).toBe(0);
+    const end = positionAtTime(projection, projection.arriveAt + 3_600_000)!;
+    expect(end.routeDistanceNm).toBeCloseTo(projection.totalDistanceNm, 1);
+  });
+
+  it('advances monotonically through the passage', () => {
+    const projection = projectPassage(path, depart, 6, plumGutLookup());
+    let previous = -1;
+    for (let t = depart; t <= projection.arriveAt; t += 3_600_000) {
+      const at = positionAtTime(projection, t)!;
+      expect(at.routeDistanceNm).toBeGreaterThanOrEqual(previous);
+      previous = at.routeDistanceNm;
+    }
   });
 });

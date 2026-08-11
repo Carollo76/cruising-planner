@@ -1,6 +1,6 @@
 import type { Position } from '../../../types/navigation';
 import { distanceNM, bearingTrue } from '../../../utils/navigation-math';
-import { alongTrackCurrentKn, subdivideLeg } from '../../../utils/route-geometry';
+import { alongTrackCurrentKn, subdivideLeg, interpolateGreatCircle } from '../../../utils/route-geometry';
 import type { Utc } from '../../../utils/time';
 
 /**
@@ -154,6 +154,46 @@ export function projectPassageIterated(
   }
 
   return { projection, driftMinutes: drift };
+}
+
+/**
+ * Where the boat is at a given instant, interpolated within the step it is on.
+ *
+ * The counterpart to arrivalAtDistance: that answers "when do we reach here", this
+ * answers "where are we now". Both read from the same current-aware projection, so a
+ * caller cannot accidentally mix a current-aware time with a current-free position.
+ */
+export function positionAtTime(
+  projection: PassageProjection,
+  at: Utc
+): { position: Position; courseDeg: number; routeDistanceNm: number } | null {
+  const steps = projection.steps;
+  if (steps.length === 0) return null;
+
+  if (at <= projection.departAt) {
+    return { position: steps[0].from, courseDeg: steps[0].courseDeg, routeDistanceNm: 0 };
+  }
+  const last = steps[steps.length - 1];
+  if (at >= last.arrivedAt) {
+    return {
+      position: last.to,
+      courseDeg: last.courseDeg,
+      routeDistanceNm: last.routeDistanceNm,
+    };
+  }
+
+  for (const step of steps) {
+    if (at <= step.arrivedAt) {
+      const span = step.arrivedAt - step.departedAt;
+      const fraction = span > 0 ? (at - step.departedAt) / span : 0;
+      return {
+        position: interpolateGreatCircle(step.from, step.to, Math.max(0, Math.min(1, fraction))),
+        courseDeg: step.courseDeg,
+        routeDistanceNm: step.routeDistanceNm - step.distanceNm * (1 - fraction),
+      };
+    }
+  }
+  return { position: last.to, courseDeg: last.courseDeg, routeDistanceNm: last.routeDistanceNm };
 }
 
 /** Where the boat is, and when, at a given distance along the route. */

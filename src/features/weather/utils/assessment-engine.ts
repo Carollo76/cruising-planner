@@ -18,6 +18,11 @@ import {
 } from '../../../services/noaa-currents';
 import { distanceNM, interpolatePosition, bearingTrue } from '../../../utils/navigation-math';
 import {
+  projectPassage,
+  positionAtTime,
+  arrivalAtDistance,
+} from '../../passage-planning/logic/propagation';
+import {
   closestApproachToRoute,
   closestApproachToSegment,
   alongTrackCurrentKn,
@@ -462,6 +467,11 @@ export async function assessRoute({
     })
   );
 
+  // One current-aware track, read by every hour below. Replaces positionAtHour, whose
+  // leg times assume slack water.
+  const track = buildTrack(route, departureTime, relevantStations, currentPredictions);
+  const trackHours = Math.max(1, Math.ceil(track.elapsedHours));
+
   // Build hourly assessments: step through the voyage in 1-hour increments
   const hourly: HourlyAssessment[] = [];
   let maxWind = 0;
@@ -472,9 +482,11 @@ export async function assessRoute({
   const cautions = new Set<string>();
   const noGos = new Set<string>();
 
-  for (let h = 0; h <= totalHours; h++) {
+  for (let h = 0; h <= trackHours; h++) {
     const ts = departureTime.getTime() + h * 60 * 60 * 1000;
-    const { position, legIndex } = positionAtHour(route, h);
+    const onTrack = positionAtTime(track, ts);
+    const position = onTrack?.position ?? positionAtHour(route, h).position;
+    const legIndex = positionAtHour(route, h).legIndex;
 
     // Use the forecast for the sample point closest to this position
     let bestForecast = windForecasts[0];
@@ -497,7 +509,7 @@ export async function assessRoute({
       current: nearestCurrent,
       stationName: nearestStationName,
       inCriticalPassage,
-    } = currentForHour(route, relevantStations, currentPredictions, h, ts);
+    } = currentForHour(route, relevantStations, currentPredictions, h, ts, track);
 
     const { windRating, gustRating, waveRating, currentRating, overallRating, warnings } = assessHour({
       point,
@@ -558,9 +570,14 @@ export async function assessRoute({
       { lat: station.lat, lng: station.lng },
       waypointPositions
     );
+    // Timed from the current-aware track, so a gate reached on a fair tide is reported
+    // at the hour the boat actually gets there.
+    const arrival = approach ? arrivalAtDistance(track, approach.routeDistanceNm) : null;
     const speedKn = route.expectedSpeedKnots > 0 ? route.expectedSpeedKnots : 6;
-    const hoursToStation = approach ? approach.routeDistanceNm / speedKn : 0;
-    const arrivalTs = departureTime.getTime() + hoursToStation * 60 * 60 * 1000;
+    const arrivalTs =
+      arrival?.at ??
+      departureTime.getTime() +
+        ((approach ? approach.routeDistanceNm / speedKn : 0) * 60 * 60 * 1000);
 
     const currentAtArrival = findCurrentAtTime(pred, arrivalTs);
     // Find nearest slack within ±4 hours
@@ -658,7 +675,10 @@ export async function assessRoute({
     routeId: route.id,
     routeName: route.name,
     departureTime: departureTime.getTime(),
-    arrivalTime: departureTime.getTime() + totalHours * 60 * 60 * 1000,
+    // From the current-aware track, not distance/cruise speed. A passage that carries a
+    // fair tide through a gate genuinely arrives earlier, and one that fights it later;
+    // reporting the slack-water figure hid both.
+    arrivalTime: track.arriveAt,
     cruisingSpeedKnots: route.expectedSpeedKnots,
     totalDistanceNM: route.totalDistanceNM,
     dataFetchedAt,
@@ -723,6 +743,59 @@ export interface WeatherWindow {
 }
 
 /**
+ * A current-aware track for a passage, built once and read for every hour.
+ *
+ * positionAtHour interpolates on the route's stored leg times, which were computed at a
+ * constant speed with no current — so the assessment was looking up current at positions
+ * derived as if there were none. Over a seventeen-hour passage that error compounds:
+ * the boat is not where the timeline thinks it is by the end, so the forecast and the
+ * gate current are both read from the wrong place at the wrong time.
+ *
+ * This uses the same projection the departure planner runs, so both engines now agree on
+ * where the boat is, not merely on which stations exist.
+ */
+function buildTrack(
+  route: Route,
+  departureTime: Date,
+  stations: Array<CurrentStation & { distanceFromRouteNM: number }>,
+  predictions: Map<string, CurrentPrediction>
+) {
+  const path = [...route.waypoints]
+    .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
+    .map((w) => w.position);
+
+  const lookup = (position: Position, at: number) => {
+    let nearest: CurrentDataPoint | null = null;
+    let nearestDist = Infinity;
+    for (const station of stations) {
+      const d = distanceNM(position, { lat: station.lat, lng: station.lng });
+      if (d >= nearestDist) continue;
+      const pred = predictions.get(station.id);
+      if (!pred) continue;
+      const sample = findCurrentAtTime(pred, at);
+      if (!sample) continue;
+      nearestDist = d;
+      nearest = sample;
+    }
+    // Outside a station's influence there is no basis for a current; the projection
+    // records that rather than assuming slack.
+    if (!nearest || nearestDist > 6) return null;
+    return {
+      signedKn: nearest.speedKnots,
+      directionDeg: nearest.directionDeg,
+      kind: nearest.type,
+    };
+  };
+
+  return projectPassage(
+    path,
+    departureTime.getTime(),
+    Math.max(1, route.expectedSpeedKnots),
+    lookup
+  );
+}
+
+/**
  * Current at the boat's position for one hour of a passage.
  *
  * Extracted because the detailed assessment and the departure-window scan were computing
@@ -735,10 +808,18 @@ function currentForHour(
   stations: Array<CurrentStation & { distanceFromRouteNM: number }>,
   predictions: Map<string, CurrentPrediction>,
   hour: number,
-  timestamp: number
+  timestamp: number,
+  track?: { steps: unknown[] } & Parameters<typeof positionAtTime>[0]
 ): { current: CurrentDataPoint | null; stationName?: string; inCriticalPassage: boolean } {
-  const { position } = positionAtHour(route, hour);
-  const nextPosition = positionAtHour(route, hour + 1).position;
+  // Prefer the current-aware track; fall back to the leg-time interpolation only when no
+  // track was built, which is the window scan before its projection exists.
+  const position = track
+    ? (positionAtTime(track, timestamp)?.position ?? positionAtHour(route, hour).position)
+    : positionAtHour(route, hour).position;
+  const nextPosition = track
+    ? (positionAtTime(track, timestamp + 3_600_000)?.position ??
+      positionAtHour(route, hour + 1).position)
+    : positionAtHour(route, hour + 1).position;
 
   let current: CurrentDataPoint | null = null;
   let stationName: string | undefined;
