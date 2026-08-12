@@ -263,7 +263,7 @@ const DEFAULT_CHECKLISTS: Checklist[] = [
 
 /** Bump this number when seed data is corrected so existing installs re-sync.
  *  Only NON-user-added destinations are refreshed; user's custom places and reviews are preserved. */
-const SEED_VERSION = 5;
+const SEED_VERSION = 6;
 
 export async function seedDatabase() {
   const storedVersion = Number(localStorage.getItem('cruisingPlanner.seedVersion') ?? '0');
