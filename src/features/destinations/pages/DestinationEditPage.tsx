@@ -7,6 +7,11 @@ import { ArrowLeft, Save, Locate, MapPin } from 'lucide-react';
 import { NauticalMap } from '../../../components/map/NauticalMap';
 import { db } from '../../../db/database';
 import { useSettingsStore } from '../../../stores/settings-store';
+import {
+  fetchChartedDepths,
+  sourceNoteFor,
+  type ChartedDepths,
+} from '../../../services/noaaChartDepths';
 import type {
   Destination,
   DestinationType,
@@ -86,6 +91,30 @@ export function DestinationEditPage() {
   const [amenities, setAmenities] = useState<Amenities>({ ...DEFAULT_AMENITIES });
   const [controllingDepth, setControllingDepth] = useState('');
   const [depthSource, setDepthSource] = useState('');
+  const [charted, setCharted] = useState<ChartedDepths | null>(null);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
+
+  /**
+   * Looks the depths up; does not decide them.
+   *
+   * The shallowest sounding within a search radius is not a channel's controlling depth —
+   * the radius takes in water beside the channel, and a boat does not sail over the shoal.
+   * So the candidates are listed for the skipper to pick from, with survey dates, rather
+   * than one being written into the field automatically.
+   */
+  const lookupCharted = async () => {
+    setChartLoading(true);
+    setChartError(null);
+    try {
+      setCharted(await fetchChartedDepths({ lat, lng }, 0.25));
+    } catch (err) {
+      setChartError((err as Error).message);
+      setCharted(null);
+    } finally {
+      setChartLoading(false);
+    }
+  };
 
   // Marina
   const [slipCount, setSlipCount] = useState('');
@@ -413,6 +442,69 @@ export function DestinationEditPage() {
             the departure planner will say the depth is unknown rather than assume there is
             water. Take it from a chart or Coast Pilot, never an estimate.
           </p>
+          <button
+            type="button"
+            onClick={lookupCharted}
+            disabled={chartLoading}
+            className="mb-3 rounded-lg bg-sea-600 px-3 py-2 text-sm font-medium text-white hover:bg-sea-700 disabled:opacity-40"
+          >
+            {chartLoading ? 'Reading charts…' : 'Look up charted depths'}
+          </button>
+
+          {chartError && (
+            <p className="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              {chartError}
+            </p>
+          )}
+
+          {charted && (
+            <div className="mb-3 rounded-lg border border-slate-700 bg-slate-950 p-3">
+              {charted.soundings.length === 0 ? (
+                <p className="text-sm text-slate-400">
+                  No charted soundings within {charted.radiusNm.toFixed(2)} NM. Try the chart
+                  directly — this harbour may only be covered at a coarser scale.
+                </p>
+              ) : (
+                <>
+                  <p className="mb-2 text-xs text-slate-400">
+                    {charted.soundings.length} charted soundings within{' '}
+                    {charted.radiusNm.toFixed(2)} NM, shallowest first. Pick the one that
+                    represents your approach — these include water beside the channel.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {charted.soundings.slice(0, 10).map((s, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setControllingDepth(String(s.depthFt));
+                          setDepthSource(
+                            `NOAA ENC sounding${s.surveyedOn ? `, surveyed ${s.surveyedOn}` : ''}`
+                          );
+                        }}
+                        title={`${s.distanceNm.toFixed(2)} NM away${s.surveyedOn ? `, surveyed ${s.surveyedOn}` : ''}`}
+                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs font-medium text-slate-100 hover:border-sea-500"
+                      >
+                        {s.depthFt.toFixed(1)} ft
+                        <span className="ml-1 text-slate-500">
+                          {s.surveyedOn ? s.surveyedOn.slice(0, 4) : '—'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {charted.oldestSurvey && Number(charted.oldestSurvey.slice(0, 4)) < 2010 && (
+                    <p className="mt-2 text-xs text-amber-400">
+                      Some of these soundings date from {charted.oldestSurvey.slice(0, 4)}.
+                      Harbours shoal between surveys — prefer the recent ones and treat old
+                      figures as indicative.
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs text-slate-500">{sourceNoteFor(charted)}</p>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-400">
