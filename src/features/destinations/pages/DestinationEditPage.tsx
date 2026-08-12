@@ -92,6 +92,15 @@ export function DestinationEditPage() {
   const [controllingDepth, setControllingDepth] = useState('');
   const [depthSource, setDepthSource] = useState('');
   const [charted, setCharted] = useState<ChartedDepths | null>(null);
+  /**
+   * How far up the approach to read.
+   *
+   * A controlling depth is the shallowest point along the whole channel, so a radius that
+   * only covers the entrance can miss the bar that actually stops the boat — Mattituck's
+   * channel runs over a mile. Adjustable rather than fixed, because channel length varies
+   * from a few hundred yards to a couple of miles.
+   */
+  const [chartRadiusNm, setChartRadiusNm] = useState(0.25);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
 
@@ -107,7 +116,7 @@ export function DestinationEditPage() {
     setChartLoading(true);
     setChartError(null);
     try {
-      setCharted(await fetchChartedDepths({ lat, lng }, 0.25));
+      setCharted(await fetchChartedDepths({ lat, lng }, chartRadiusNm));
     } catch (err) {
       setChartError((err as Error).message);
       setCharted(null);
@@ -442,14 +451,36 @@ export function DestinationEditPage() {
             the departure planner will say the depth is unknown rather than assume there is
             water. Take it from a chart or Coast Pilot, never an estimate.
           </p>
-          <button
-            type="button"
-            onClick={lookupCharted}
-            disabled={chartLoading}
-            className="mb-3 rounded-lg bg-sea-600 px-3 py-2 text-sm font-medium text-white hover:bg-sea-700 disabled:opacity-40"
-          >
-            {chartLoading ? 'Reading charts…' : 'Look up charted depths'}
-          </button>
+          <div className="mb-3 flex flex-wrap items-end gap-2">
+            <button
+              type="button"
+              onClick={lookupCharted}
+              disabled={chartLoading}
+              className="rounded-lg bg-sea-600 px-3 py-2 text-sm font-medium text-white hover:bg-sea-700 disabled:opacity-40"
+            >
+              {chartLoading ? 'Reading charts…' : 'Look up charted depths'}
+            </button>
+            <label className="text-xs font-medium text-slate-400">
+              Search radius
+              <select
+                value={chartRadiusNm}
+                onChange={(e) => setChartRadiusNm(Number(e.target.value))}
+                className="ml-2 rounded bg-slate-800 px-2 py-1.5 text-sm text-slate-100 outline-none focus:ring-1 focus:ring-sea-500"
+              >
+                <option value={0.15}>0.15 NM — entrance only</option>
+                <option value={0.25}>0.25 NM — short approach</option>
+                <option value={0.5}>0.5 NM — typical channel</option>
+                <option value={1}>1 NM — long channel</option>
+                <option value={2}>2 NM — river or creek</option>
+              </select>
+            </label>
+          </div>
+          <p className="mb-3 text-xs text-slate-400">
+            A controlling depth is the shallowest point along the whole channel, not the
+            depth at the mouth. Widen the radius until it covers your approach, then pick
+            the shallowest sounding that lies <em>in</em> the channel — readings either side
+            of it are water you will not sail over.
+          </p>
 
           {chartError && (
             <p className="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
